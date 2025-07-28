@@ -1,0 +1,552 @@
+* {
+    box-sizing: border-box;
+}
+body {
+   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; /*Use bootstrap's default fonts everywhere */
+    /*background-color: #f0f0f0; */
+    color: white; /* Set text color to white */
+    margin: 0;
+    padding: 20px;
+    background: black;
+    background-image: url("stadium.jpeg");  /* image name */
+    /*background-image: url("https://assets.codepen.io/11366098/stadium.jpeg?format=auto");  image name */
+    background-repeat: repeat;
+    background-size: cover;
+    background-position: center;
+
+    display: flex;
+    flex-direction: column;
+}
+header {
+    background-color: none;
+    color: white;
+    padding: 20px;
+}
+h1 {
+    text-align: Left;
+    color: white
+}
+h3 {
+    text-align: Left;
+    color: white
+}
+nav ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+nav li {
+    display: inline-block;
+    margin-right: 20px;
+    padding: 20px;
+}
+main {
+    padding: 20px;
+}
+section {
+    padding: 20px;
+    border: 1px solid #ccc;
+}
+footer {
+    background-color: none;
+    color: white;
+    padding: 20px;
+    text-align: left;
+}
+img {
+    max-width: 75%;
+    max-height: 75%;
+}
+button, input, select, text area{
+	font-family: inherit;
+	font-size: 100%;
+}
+Label {
+	color: white; 
+	font-weight: bold;
+}
+table, td, th {
+    width : 850px;
+    margin : 20px;
+    border: 2px solid blue;
+    border-collapse:collapse;
+    font-family: inherit;
+    padding-right: 10px;
+}
+th {
+	text-align: center;
+	color: #0000FF;
+	background-color: #f0f0f0;
+    font-weight: bold;
+	font-size: 1.2em;
+}
+h2 {
+    text-align: center;
+}
+	/* dataentry-specific stying */
+.dataentry {
+	width: 40%; /* Adjust the width of the form container */
+    margin: 0 auto;
+    padding: 20px;
+    background-color: black;
+    border-radius: 10px;
+    margin-left: 0; /* Align form container to the left */
+}
+input[type="text"],
+input[type="email"],
+input[type="tel"] {
+    width: calc(100% - 20px); /* Adjusted width */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #fff;
+    color: #333;
+    display: block; /* Ensure inputs are displayed as block elements */
+}
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="tel"]::placeholder {
+    color: #ccc; /* Set placeholder text color to gray */
+    } 
+input[type="checkbox"] {
+    margin-right: 5px;
+}
+button[type="submit"] {
+    padding: 10px 20px;
+    background-color: #1A43BF;
+    border: 1px solid gray; /* Add gray border */
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+}
+button[type="submit"]:hover {
+    background-color: #0A2472;
+}
+/* End of dataentry styling */
+        
+/* dataentry2-specific stying */
+.dataentry2 {
+	width: 40%; /* Adjust the width of the form container */
+    margin: 0 auto;
+    padding: 20px;
+    background-color: none;
+    border-radius: 10px;
+    margin-left: 0; /* Align form container to the left */
+}
+      input[type="text"],
+      input[type="email"],
+      input[type="tel"] {
+          width: calc(100% - 20px); /* Adjusted width */
+          padding: 10px;
+          border: 1px solid #ccc;
+          border-radius: 5px;
+          background-color: #fff;
+          color: #333;
+          display: block; /* Ensure inputs are displayed as block elements */
+}
+      input[type="text"]::placeholder,
+      input[type="email"]::placeholder,
+      input[type="tel"]::placeholder {
+		  color: #ccc; /* Set placeholder text color to gray */
+      } 
+      input[type="checkbox"] {
+      	margin-right: 5px;
+      }
+      button[type="submit"] {
+          padding: 10px 20px;
+          background-color: #1A43BF;
+          border: 1px solid gray; /* Add gray border */
+          border-radius: 5px;
+          color: white;
+          cursor: pointer;
+      }
+      button[type="submit"]:hover {
+          background-color: #0A2472;
+      }
+.card {
+    	margin: 20px 0;
+    background-color: black; /* Change the card background color to black */
+    color: white; /* Change the text color to white for better readability */
+}
+
+.card-header {
+    background-color: #1A43BF;
+    color: white;
+}
+
+.team-info h5 {
+    margin: 0;
+}
+
+.team-info .score {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-left {
+    text-align: left;
+}
+/* End of data entry2  */
+
+
+/* Global Styles for Bootstrap */
+
+ .submit-button {
+    width: 130px; /* Example width */
+    height: 40px; /* Example height */display: inline-block; /* Make buttons fit text width */
+    margin-bottom: 10px; /* Adjust spacing between buttons */
+    padding: 5px 10px; /* Optional padding for aesthetics */
+    border-radius: 5px; /* Example rounded corners */
+    background-color: #1A43BF;
+    border: 2px solid #ccc;
+    color: white; /* Text color */
+    font-size: 16px;
+    font-family: Arial, sans-serif;
+}
+
+.section {
+    position: relative;
+    top: 50px;
+    left: 100px;
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+}
+
+/* Layout */
+
+ .container-fluid {
+    padding-left: 0.5in;
+    padding-right: 0.5in;
+ }
+.content {
+    flex: 1 0 auto;
+    position: relative;
+    width: 100%;
+    padding-bottom: 60px; /* Height of the footer */
+}
+
+.footer {
+    flex-shrink: 0;
+    width: 100%;
+    height: 60px;
+}
+
+/* Header Styles */
+header {
+    text-align: center;
+    padding-top: 20px;
+}
+
+
+
+/* Button Container Styles */
+.button-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-top: 20px;
+    margin-left: 20px;
+}
+
+.button-container form {
+    margin-bottom: 10px;
+}
+
+.button-container button {
+    width: 200px;
+}
+.btn-main-menu {
+    margin-bottom: 20px;
+    background-color: #1A43BF; /* Match the Card header color */
+    border-color: #1A43BF; /* Optional: Adjust border color */
+    color: white; /* Text color */
+}
+
+/* Tables */
+.table {
+    table-layout: fixed;
+    width: auto;
+}
+.table th, .table td {
+    padding: 2px;
+    text-align: center;
+    vertical-align: bottom;
+}
+.table th {
+    background-color: #007bff;
+    color: white;
+}
+.table td {
+    background-color: black;
+    height: 102px; /* Exactly 3 logos high (34px * 3) */
+}
+.table .user-column {
+    width: 150px;
+    text-align: left;
+    padding-left: 5px;
+}
+.table .week-column {
+    width: 34px;
+}
+.table-responsive {
+    margin-top: 20px;
+    overflow-x: auto;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+/* Card Styling */
+
+.card {
+    height: 100%;
+}
+.card-header {
+    padding: 0.5rem 1rem;
+}
+.card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 1rem;
+}
+.card-body form {
+    margin-bottom: 0rem;
+}
+.nav-tabs {
+		 border: none;
+         margin-top: 0;
+         padding-left: 0;
+     }
+     .nav-tabs .nav-item {
+         margin-bottom: -1px;
+         position: relative;
+         border: none !important;
+         border-radius: 5px 5px 0 0; /* Rounded top corners */
+         transition: transform 0.3s ease;
+     }
+     .nav-tabs .nav-item:hover {
+   transform: scale(1.05); /* Grow by 5% on hover */
+   font-size: 1.2em /*Increase icon size on hover */
+}
+      .nav-tabs .nav-link {
+          display: flex;
+	    flex-direction: column;
+	    align-items: center;
+	    justify-content: center;
+  		height: 60px;	
+  		font-size: 2.0em; /* Default icon size */
+ 		transition: font-size 0.3s ease; /* Smooth transition for font size */
+ 		color: white; /* Set default text color to white */
+     }
+     .nav-tabs .nav-link.active {
+         color: #007bff;
+         background-color: #fff;
+         border: none;
+         border-bottom: 1px solid #fff; /* White bottom border for active tab */
+     }
+     .page-name {
+	    position: absolute;
+	    bottom: calc(100% + 5px); /* Raised by 5px */
+	    left: 50%;
+	    transform: translateX(-50%);
+	    background-color: rgba(0, 0, 0, 0.8);
+	    color: white;
+	    padding: 5px 10px;
+	    border-radius: 5px;
+	    font-size: 0.8rem;
+	    opacity: 0;
+	    transition: opacity 0.3s ease;
+	    pointer-events: none;
+	    white-space: nowrap;
+	 }
+		.nav-tabs .nav-item:hover .page-name {
+		    opacity: 1;
+		}
+      .utility-bar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 10px;
+          margin-bottom: 15px;
+      }
+      .koth-info {
+          font-weight: bold;
+          font-size: 1.1rem;
+          display: flex;
+          flex-direction: column;
+          align-items: left;
+          padding: 5px 10px;
+          background-color: rgba(0, 0, 0, 0.6);
+          border-radius: 5px;
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+      }
+      .user-info {
+          display: flex;
+          flex-direction: column;
+		  align-items: flex-start;
+          padding: 5px 10px;
+          background-color: rgba(0, 0, 0, 0.6);
+          border-radius: 5px;
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+      }        
+      .user-info-top {
+		    display: flex;
+		    align-items: center;
+		    margin-bottom: 5px;
+		}
+.user-info i {
+    margin-right: 10px;
+    font-size: 1.2em;
+    color: white; /* Set a fixed color for the icon */
+    transition: transform 0.3s ease;
+}
+      .user-info a {
+          text-decoration: none;
+          color: white;
+          font-weight: bold;
+          font-size: 1.1rem;
+          text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+          transition: all 0.3s ease;
+      }
+      .user-info a:hover {
+          color: #007bff;
+      }
+      .user-info a.logout {
+          color: #007bff;
+      }
+      .user-info a.logout:hover {
+          color: #0056b3;
+      }
+      .user-info a.username {
+	      text-decoration: none;
+	      color: white;
+	      font-weight: bold;
+	      font-size: 1.1rem;
+	      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+	      transition: transform 0.3s ease;
+	 }
+	 .user-info a.username:hover {
+	      color: white; /* Keep the username color white on hover */
+	   	  transform: scale(1.05); /* Apply 1.05 scale on hover */
+	 }
+	.user-info a.username:hover i {
+	    transform: scale(1.05); /* Apply 1.05 scale to icon on username hover */
+	}
+
+        body { padding-top: 0px; }
+      .team-score {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+      }
+      .team-name {
+          flex-grow: 1;
+          display: flex;
+          align-items: center;
+          cursor: pointer;
+      }
+      .away-score-info, .home-score-info {
+          min-width: 50px;
+          text-align: right;
+          margin-left: 10px;
+          font-weight: bold;
+      }
+      .team-logo {
+          width: 40px;
+          height: 40px;
+          margin-right: 10px;
+          cursor: pointer;
+          border: 4px solid transparent;
+          border-radius: 50%;
+          position: relative;
+      }
+      .team-logo.selected-1 {
+          box-shadow: 0 0 0 4px #007bff, 0 0 0 6px black;
+      }
+      .team-logo.selected-2 {
+          box-shadow: 0 0 0 4px #007bff, 0 0 0 6px black, 0 0 0 10px #007bff, 0 0 0 12px black;
+      }
+      .team-logo.selected-3 {
+          box-shadow: 0 0 0 4px #007bff, 0 0 0 6px black, 0 0 0 10px #007bff, 0 0 0 12px black, 0 0 0 16px #007bff, 0 0 0 18px black;
+      }
+      #pickCountDisplay {
+          color: white;
+          font-weight: bold;
+          position: relative;
+          margin-right: 20px;
+      }
+      .game-status {
+          margin-bottom: 0;
+          margin-top: 0.25rem;
+      }
+      .card-body { padding-bottom: 0px; }
+      #pickCountDisplay, h5.pick-instruction {
+          color: white;
+          font-weight: bold;
+          font-size: 1.2rem;
+          padding: 5px 10px;
+          background-color: rgba(0, 0, 0, 0.75);
+          border-radius: 5px;
+          display: inline-block;
+          text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+          box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+          border: 1px solid white;
+      }
+      h5.pick-instruction { margin-bottom: 15px; }
+      .fixed-subheader {
+          position: fixed;
+          top: 160px;
+          left: 0;
+          right: 0;
+          z-index: 999;
+          padding: 10px 0;
+      }
+      .fixed-subheader .container {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          position: relative;
+      }
+      .main-content { padding-top: 100px; }
+      .floating-submit {
+          position: relative;
+          left: 18px;
+          top: 10px;
+          z-index: 1000;
+      }
+      .floating-submit .btn { border: 1px solid white; }
+      .badge {
+          font-size: 0.9rem;
+          padding: 0.4rem 0.6rem;
+      }
+      .badge-warning { color: #000; }
+      .game-status .badge-warning {
+          background-color: #ffc107;
+          animation: pulse 2s infinite;
+      }
+	  @keyframes pulse {
+		    0% { opacity: 1; }
+		    50% { opacity: 0.7; }
+		    100% { opacity: 1; }
+      }
+      .alert-success {
+	    opacity: 1;
+	    transition: opacity 1s;
+	}
+	
+
+
+
+       
