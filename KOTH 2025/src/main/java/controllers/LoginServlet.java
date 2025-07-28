@@ -9,6 +9,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import helpers.LoginResult;
 import helpers.SqlConnectorUserTable;
+import model.User;
 import helpers.SqlConnectorPicksPriceTable;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.WebApplicationContextUtils;
@@ -63,8 +64,14 @@ public class LoginServlet extends HttpServlet {
         LoginResult result = sqlConnectorUserTable.authenticateUser(username, password);
 
         if (result == LoginResult.SUCCESS) {
+            User user = sqlConnectorUserTable.getUserByUsername(username);
+
             HttpSession session = request.getSession();
             session.setAttribute("userName", username);
+            session.setAttribute("userId", user.getIdUser());
+            session.setAttribute("admin", user.isAdmin());
+            session.setAttribute("commish", user.isCommish());
+
             response.sendRedirect("HomeServlet");
         } else {
             request.setAttribute("errorMessage", "Invalid username or password.");
