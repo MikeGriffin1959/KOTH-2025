@@ -1,0 +1,36 @@
+# Eclipse project files
+.classpath
+.project
+.settings/
+
+# Java build output
+bin/
+target/
+out/
+
+# Tomcat / Server-related
+*.war
+*.ear
+*.log
+*.tmp
+
+# IDE-specific
+*.iml
+.idea/
+*.swp
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Maven/Gradle cache
+.mvn/
+.mvnw/
+.gradle/
+build/
+
+# Logs
+*.log
+
+# Backup files
+*~
