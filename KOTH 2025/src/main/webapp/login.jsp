@@ -44,7 +44,7 @@
 <body>
     <div class="content container">
         <h1 class="text-center mt-5">${applicationScope.kothSeason}</h1>
-        <c:if test="${not empty error}">
+        <c:if test="${not empty errorMessage}">
             <div class="alert alert-danger" role="alert">
                 ${error}
             </div>
@@ -80,12 +80,12 @@
         </form>
 
        
-       	 <c:if test="${applicationScope.allowSignUp}">
+       	 <%-- <c:if test="${applicationScope.allowSignUp}">--%>
             <p class="mt-3">New Users:</p>
             <form action="SignUpServlet" method="get">
                 <button type="submit" class="btn btn-secondary">Sign Up</button>
             </form>
-         </c:if>
+         <%-- </c:if>--%>
     </div>
 </body>
 </html>

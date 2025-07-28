@@ -1,38 +1,35 @@
 package controllers;
 
 import java.io.IOException;
-import java.util.List;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import javax.servlet.ServletContext;
 import helpers.LoginResult;
 import helpers.SqlConnectorUserTable;
 import helpers.SqlConnectorPicksPriceTable;
-import model.User;
-import model.PicksPrice;
-import services.ServletUtility;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.context.support.SpringBeanAutowiringSupport;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.support.WebApplicationContextUtils;
 
 @WebServlet("/LoginServlet")
 public class LoginServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
 
-    @Autowired
     private SqlConnectorUserTable sqlConnectorUserTable;
-
-    @Autowired
-    private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
+    @SuppressWarnings("unused")
+	private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
 
     @Override
     public void init() throws ServletException {
-        // Enable Spring dependency injection in servlet
-        SpringBeanAutowiringSupport.processInjectionBasedOnCurrentContext(this);
+        // Get Spring WebApplicationContext and fetch beans manually
+        WebApplicationContext springContext =
+                WebApplicationContextUtils.getRequiredWebApplicationContext(getServletContext());
+
+        this.sqlConnectorUserTable = springContext.getBean(SqlConnectorUserTable.class);
+        this.sqlConnectorPicksPriceTable = springContext.getBean(SqlConnectorPicksPriceTable.class);
     }
 
     @Override
@@ -40,13 +37,6 @@ public class LoginServlet extends HttpServlet {
             throws ServletException, IOException {
 
         System.out.println("LoginServlet.doGet() called");
-        long startTime = System.nanoTime();
-
-        // Set common attributes for session & app context
-        ServletUtility.setCommonAttributes(request, getServletContext());
-
-        // Update KOTH settings
-        updateKothSettings();
 
         HttpSession session = request.getSession(false);
         if (session != null && session.getAttribute("userName") != null) {
@@ -62,16 +52,12 @@ public class LoginServlet extends HttpServlet {
         request.getRequestDispatcher("login.jsp").forward(request, response);
     }
 
-    private void updateKothSettings() {
-        // Your logic to refresh KOTH-related data
-        System.out.println("Updating KOTH settings...");
-    }
-
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        System.out.println("LoginServlet.doPost() called");
 
-        String username = request.getParameter("username");
+        String username = request.getParameter("userName");
         String password = request.getParameter("password");
 
         LoginResult result = sqlConnectorUserTable.authenticateUser(username, password);

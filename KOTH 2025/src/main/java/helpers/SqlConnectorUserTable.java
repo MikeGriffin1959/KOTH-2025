@@ -1,6 +1,6 @@
 package helpers;
 
-import javax.sql.DataSource; // could not get jakarta.sql.DataSource to work
+import javax.sql.DataSource; 
 import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -288,7 +288,9 @@ public class SqlConnectorUserTable {
  // Method to validate user credentials (Login Servlet)
     public LoginResult isValidUser(String username, String password) {
         System.out.println("SqlConnectorUserTable.isValidUser method called");
-        String sql = "SELECT * FROM User WHERE userName = ? COLLATE utf8mb4_bin";  // Use utf8mb4_bin for case-sensitive comparison
+        String sql = "SELECT * FROM User WHERE userName = ?";
+
+  //      String sql = "SELECT * FROM User WHERE userName = ? COLLATE utf8mb4_bin";  // Use utf8mb4_bin for case-sensitive comparison
         try (Connection connection = dataSource.getConnection();
              PreparedStatement pstmt = connection.prepareStatement(sql)) {
 
