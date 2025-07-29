@@ -70,7 +70,6 @@ public class MakePicksServlet {
             return "redirect:/login";
         }
 
-        // Set common attributes
         ServletUtility.setCommonAttributes(request, request.getServletContext());
 
         String season = (String) request.getAttribute("season");
@@ -91,18 +90,15 @@ public class MakePicksServlet {
         String userName = (String) session.getAttribute("userName");
         Integer userId = (Integer) session.getAttribute("userId");
 
-        System.out.println("MakePicksServlet: User info - Name: " + userName + ", ID: " + userId);
-
         if (userId == null) {
             System.out.println("MakePicksServlet: User ID not found in session");
             model.addAttribute("errorMessage", "User ID not found.");
             return "error";
         }
 
-        // Handle remaining picks validation - use prior week, NOT live data from current week's results
         @SuppressWarnings("unchecked")
-        Map<String, Integer> userRemainingPicksPriorWeek = 
-            (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
+        Map<String, Integer> userRemainingPicksPriorWeek =
+                (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
 
         if (userRemainingPicksPriorWeek == null || userRemainingPicksPriorWeek.isEmpty()) {
             System.out.println("MakePicksServlet: userRemainingPicksPriorWeek is null or empty, redirecting to HomeServlet");
@@ -113,62 +109,30 @@ public class MakePicksServlet {
         System.out.println("MakePicksServlet: Remaining picks for user " + userName + ": " + remainingPicks);
 
         try {
-            // Fetch and update ESPN data
+            // ✅ Fetch filtered ESPN games for current week
             System.out.println("MakePicksServlet: Fetching ESPN score data");
-            String espnApiResponse = nflGameFetcherService.fetchCurrentWeekGames(); 
-                
-            System.out.println("MakePicksServlet: Parsing ESPN score data");
-            List<Game> espnGames = ApiParsers.ParseESPNAPIMinimal(espnApiResponse);
+            List<Game> espnGames = nflGameFetcherService.fetchCurrentWeekGames();
+            System.out.println("MakePicksServlet: Fetched " + espnGames.size() + " games for current week");
 
-            // Create new list for games with season/week values
-            List<Game> gamesToUpdate = new ArrayList<>();
-            System.out.println("MakePicksServlet: Preparing games with season/week values");
-            for (Game game : espnGames) {
-                Game updatedGame = new Game();
-                updatedGame.setGameID(game.getGameID());
-                updatedGame.setSeason(seasonInt);
-                updatedGame.setWeek(weekInt);
-                updatedGame.setStatus(game.getStatus());
-                updatedGame.setHomeTeamId(game.getHomeTeamId());
-                updatedGame.setAwayTeamId(game.getAwayTeamId());
-                updatedGame.setHomeScore(game.getHomeScore());
-                updatedGame.setAwayScore(game.getAwayScore());
-                updatedGame.setHomeTeamName(game.getHomeTeamName());
-                updatedGame.setAwayTeamName(game.getAwayTeamName());
-                updatedGame.setDisplayClock(game.getDisplayClock());
-                updatedGame.setPeriod(game.getPeriod());
-                updatedGame.setDate(game.getDate());
-                
-                System.out.println("Preparing game " + game.getGameID() + 
-                                 " with season=" + seasonInt + 
-                                 ", week=" + weekInt);
-                gamesToUpdate.add(updatedGame);
-            }
+            // ✅ Update DB with fresh game data
+            sqlConnectorGameTable.updateGameTableMinimal(espnGames);
 
-            System.out.println("MakePicksServlet: Updating ESPN games in database");
-            sqlConnectorGameTable.updateGameTableMinimal(gamesToUpdate);
-
-            // Fetch user picks and team data
+            // ✅ Retrieve picks and teams
             Map<String, List<String>> selectedPicks = sqlConnectorPicksTable.getUserPicks(userId, seasonInt, weekInt);
-            System.out.println("MakePicksServlet: Retrieved " + selectedPicks.size() + " picks for user " + userId);
-
             Map<String, String> teamNameToAbbrev = sqlConnectorTeamsTable.getTeamNameToAbbrev();
 
-            // Fetch updated games from database
+            // ✅ Get games from DB (already filtered by season/week)
             List<Game> games = sqlConnectorGameTable.getGamesForWeek(seasonInt, weekInt);
             System.out.println("MakePicksServlet: Retrieved " + games.size() + " games for Season: " + season + ", Week: " + week);
 
-            // Update odds for scheduled games
-            System.out.println("MakePicksServlet: Updating odds for scheduled games");
+            // ✅ Update odds for scheduled games
             updateOddsForScheduledGames(games);
-                
-            // Refresh games list to get updated odds
             games = sqlConnectorGameTable.getGamesForWeek(seasonInt, weekInt);
 
-            // Process game statuses and update display flags
+            // ✅ Process statuses and display flags
             processGameStatus(games);
 
-            // Set model attributes
+            // ✅ Add attributes for JSP
             model.addAttribute("remainingPicks", remainingPicks);
             model.addAttribute("selectedPicks", selectedPicks);
             model.addAttribute("teamNameToAbbrev", teamNameToAbbrev);
@@ -181,9 +145,8 @@ public class MakePicksServlet {
             double durationInSeconds = (endTime - startTime) / 1_000_000_000.0;
             System.out.printf("MakePicksServlet.doGet Method execution time: %.1f Seconds%n", durationInSeconds);
 
-            System.out.println("MakePicksServlet: Returning makePicks view");
             return "makePicks";
-                
+
         } catch (Exception e) {
             System.err.println("MakePicksServlet: Error processing request: " + e.getMessage());
             e.printStackTrace();
@@ -191,6 +154,7 @@ public class MakePicksServlet {
             return "error";
         }
     }
+
  
     @PostMapping("/MakePicksServlet")
     public String doPost(HttpServletRequest request, HttpServletResponse response, Model model) throws ServletException, IOException {

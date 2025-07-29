@@ -4,27 +4,32 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import helpers.ApiFetchers;
 import helpers.ApiFetchers.NFLSeasonType;
+import helpers.ApiParsers;
+import model.Game;
 import java.io.IOException;
+import java.util.List;
 
 @Service
 public class NFLGameFetcherService {
     
-    @Autowired
-    private NFLSeasonCalculator nflSeasonCalculator;
+	@Autowired
+	private NFLSeasonCalculator nflSeasonCalculator;
 
-    public String fetchCurrentWeekGames() throws IOException {
-        System.out.println("NFLGameFetcherService.fetchCurrentWeekGames method started");
-        
-        NFLSeasonType seasonType = nflSeasonCalculator.getCurrentSeasonType();
-        NFLGameWeek currentWeek = nflSeasonCalculator.getCurrentNFLWeek();
+	public List<Game> fetchCurrentWeekGames() throws IOException {
+	    System.out.println("NFLGameFetcherService.fetchCurrentWeekGames method started");
 
-        System.out.println("NFLGameFetcherService.fetchCurrentWeekGames: Fetching games for season type: " + seasonType);
-        System.out.println("NFLGameFetcherService.fetchCurrentWeekGames: Current NFL Week: " + currentWeek);
+	    NFLSeasonType seasonType = nflSeasonCalculator.getCurrentSeasonType();
+	    NFLGameWeek currentWeek = nflSeasonCalculator.getCurrentNFLWeek();
+	    int currentSeason = nflSeasonCalculator.getCurrentNFLSeason();
 
-        return ApiFetchers.FetchESPNWeeklyScoreboard(seasonType, currentWeek);
-    }
+	    System.out.println("NFLGameFetcherService.fetchCurrentWeekGames: Fetching games for season type: " + seasonType);
+	    System.out.println("NFLGameFetcherService.fetchCurrentWeekGames: Current NFL Week: " + currentWeek);
+	    System.out.println("NFLGameFetcherService.fetchCurrentWeekGames: Current NFL Season: " + currentSeason);
 
-    public String fetchGamesForType(NFLSeasonType seasonType, NFLGameWeek gameWeek) throws IOException {
-        return ApiFetchers.FetchESPNWeeklyScoreboard(seasonType, gameWeek);
-    }
+	    String apiResponse = ApiFetchers.FetchESPNWeeklyScoreboard(seasonType, currentWeek);
+
+	    // ✅ Parse and filter games
+	    return ApiParsers.ParseESPNAPIMinimal(apiResponse, currentSeason, currentWeek.getWeekNumber());
+	}
+
 }

@@ -62,8 +62,8 @@ public class ApiParsers {
         return gamesList;
     }
 
-    public static List<Game> ParseESPNAPIMinimal(String apiResponse) {
-    	System.out.println("ApiParsers.ParseESPNAPIMinimal method started");
+    public static List<Game> ParseESPNAPIMinimal(String apiResponse, int currentSeason, int currentWeek) {
+        System.out.println("ApiParsers.ParseESPNAPIMinimal method started");
         List<Game> games = new ArrayList<>();
         try {
             JSONObject jsonObject = new JSONObject(apiResponse);
@@ -71,22 +71,31 @@ public class ApiParsers {
 
             for (int i = 0; i < events.length(); i++) {
                 JSONObject event = events.getJSONObject(i);
+
+                // Extract season and week
+                int seasonYear = event.getJSONObject("season").getInt("year");
+                int weekNumber = event.getJSONObject("week").getInt("number");
+
+                // ✅ Filter out games from other seasons or weeks
+                if (seasonYear != currentSeason || weekNumber != currentWeek) {
+                    System.out.println("Skipping game from season " + seasonYear + ", week " + weekNumber);
+                    continue;
+                }
+
                 JSONObject competition = event.getJSONArray("competitions").getJSONObject(0);
                 JSONArray competitors = competition.getJSONArray("competitors");
                 JSONObject status = competition.getJSONObject("status");
 
                 Game game = new Game();
                 game.setGameID(Long.parseLong(event.getString("id")));
-                
-                // Set date
+                game.setSeason(seasonYear);
+                game.setWeek(weekNumber);
+
                 if (event.has("date")) {
                     game.setDate(event.getString("date"));
                 }
-                
-                // Set status with type name
+
                 game.setStatus(status.getJSONObject("type").getString("name"));
-                
-                // Add clock and period for in-progress games
                 if (status.has("displayClock")) {
                     game.setDisplayClock(status.getString("displayClock"));
                 }
@@ -94,14 +103,12 @@ public class ApiParsers {
                     game.setPeriod(String.valueOf(status.getInt("period")));
                 }
 
-                // Process competitors
                 for (int j = 0; j < competitors.length(); j++) {
                     JSONObject competitor = competitors.getJSONObject(j);
                     String homeAway = competitor.getString("homeAway");
                     int score = competitor.getInt("score");
                     JSONObject teamObj = competitor.getJSONObject("team");
-                    
-                    // Get team details
+
                     int teamId = teamObj.getInt("id");
                     String teamName = teamObj.getString("name");
                     String location = teamObj.getString("location");
@@ -117,13 +124,12 @@ public class ApiParsers {
                         game.setAwayTeamName(fullName);
                     }
                 }
-                
-                // Debug logging for each game
+
                 System.out.println("\nParsed game " + game.getGameID() + ":");
-                System.out.println("Status: " + game.getStatus());
+                System.out.println("Season: " + game.getSeason() + ", Week: " + game.getWeek());
                 System.out.println("Teams: " + game.getAwayTeamName() + " @ " + game.getHomeTeamName());
                 System.out.println("Score: " + game.getAwayScore() + "-" + game.getHomeScore());
-                
+
                 games.add(game);
             }
         } catch (Exception e) {
@@ -132,6 +138,7 @@ public class ApiParsers {
         }
         return games;
     }
+
     
     public static List<Team> ParseESPNTeams(String apiResponse) {
         List<Team> teamsList = new ArrayList<>();

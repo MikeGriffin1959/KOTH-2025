@@ -57,16 +57,7 @@ public class HomeServlet {
             }
 
             ServletContext context = request.getServletContext();
-            
-            // Log all session attributes
-            Enumeration<String> attributeNames = session.getAttributeNames();
-            System.out.println("HomeServlet: All session attributes:");
-            while (attributeNames.hasMoreElements()) {
-                String attributeName = attributeNames.nextElement();
-                System.out.println("  " + attributeName + ": " + session.getAttribute(attributeName));
-            }
-            
-            // Use CommonProcessingService to handle common processing
+
             if (request.getAttribute("commonProcessingDone") == null) {
                 commonProcessingService.processCommonData(request, response, context);
             }
@@ -77,114 +68,37 @@ public class HomeServlet {
             if (seasonStr == null) seasonStr = (String) session.getAttribute("season");
             if (weekStr == null) weekStr = (String) session.getAttribute("currentWeek");
 
-            System.out.println("HomeServlet.doGet: Retrieved attributes after CommonProcessingService - Season: " + seasonStr +
-                    ", Week: " + weekStr);
-
             if (seasonStr == null) {
                 LocalDateTime now = LocalDateTime.now();
                 int year = now.getYear();
-                
-                if (now.getMonthValue() <= 2) {
-                    year--;
-                } else {
-                    LocalDate seasonStart = LocalDate.of(year, Month.SEPTEMBER, 1)
-                        .with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY))
-                        .plusDays(2);
-                        
-                    if (now.toLocalDate().isBefore(seasonStart)) {
-                        year--;
-                    }
-                }
+                if (now.getMonthValue() <= 2) year--;
                 seasonStr = String.valueOf(year);
             }
-
             if (weekStr == null || weekStr.isEmpty()) {
-                weekStr = (String) session.getAttribute("currentWeek");
-                if (weekStr == null || weekStr.isEmpty()) {
-                    weekStr = "1";
-                }
+                weekStr = "1";
             }
 
             int seasonInt = Integer.parseInt(seasonStr);
             int weekInt = Integer.parseInt(weekStr);
 
-            System.out.println("HomeServlet.doGet: Using values - Season: " + seasonStr + ", Week: " + weekStr);
+            // ✅ Fetch current week games from ESPN API (filtered)
+            System.out.println("HomeServlet.doGet: Fetching filtered games");
+            List<Game> parsedGames = nflGameFetcherService.fetchCurrentWeekGames();
+            System.out.println("HomeServlet: Parsed " + parsedGames.size() + " valid games");
 
-            System.out.println("HomeServlet.doGet: Fetching scores from ESPN API");
-            String apiResponse = nflGameFetcherService.fetchCurrentWeekGames();
+            // ✅ Update DB with latest ESPN data
+            sqlConnectorGameTable.updateGameTableMinimal(parsedGames);
 
-            if (apiResponse == null) {
-                System.out.println("HomeServlet: Failed to fetch data from ESPN API");
-                return "error";
-            }
+            // ✅ Fetch all picks and update page
+            Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData =
+                    sqlConnectorPicksTable.getPicksForAllWeeks(seasonInt, weekInt);
 
-            System.out.println("HomeServlet.doGet: Parsing ESPN API response");
-            List<Game> parsedGames = ApiParsers.ParseESPNAPIMinimal(apiResponse);
-            System.out.println("HomeServlet: Parsed " + parsedGames.size() + " games from ESPN API");
-
-            // Create a new list for games with verified season/week values
-            List<Game> gamesToUpdate = new ArrayList<>();
-            System.out.println("HomeServlet: Setting season/week for games and preparing for update");
-            
-            for (Game parsedGame : parsedGames) {
-                Game gameToUpdate = new Game();
-                
-                // Set the crucial identifying fields
-                gameToUpdate.setGameID(parsedGame.getGameID());
-                gameToUpdate.setSeason(seasonInt);
-                gameToUpdate.setWeek(weekInt);
-                
-                // Set all other fields from the parsed game
-                gameToUpdate.setStatus(parsedGame.getStatus());
-                gameToUpdate.setHomeTeamId(parsedGame.getHomeTeamId());
-                gameToUpdate.setAwayTeamId(parsedGame.getAwayTeamId());
-                gameToUpdate.setHomeScore(parsedGame.getHomeScore());
-                gameToUpdate.setAwayScore(parsedGame.getAwayScore());
-                gameToUpdate.setDate(parsedGame.getDate());
-                gameToUpdate.setHomeTeamName(parsedGame.getHomeTeamName());
-                gameToUpdate.setAwayTeamName(parsedGame.getAwayTeamName());
-                gameToUpdate.setDisplayClock(parsedGame.getDisplayClock());
-                gameToUpdate.setPeriod(parsedGame.getPeriod());
-                
-                gamesToUpdate.add(gameToUpdate);
-                
-                // Debug logging for each game
-                System.out.println(String.format("Preparing game %d - Season: %d, Week: %d, Status: %s", 
-                    gameToUpdate.getGameID(), 
-                    gameToUpdate.getSeason(), 
-                    gameToUpdate.getWeek(),
-                    gameToUpdate.getStatus()));
-            }
-
-            System.out.println("HomeServlet: Updating " + gamesToUpdate.size() + " games in database");
-            sqlConnectorGameTable.updateGameTableMinimal(gamesToUpdate);
-
-            System.out.println("HomeServlet: Fetching all weeks' data from database");
-            Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData = 
-                sqlConnectorPicksTable.getPicksForAllWeeks(seasonInt, weekInt);
-
-//            @SuppressWarnings("unchecked")
-//            Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData = 
-//                (Map<Integer, Map<String, List<Map<String, Object>>>>) session.getAttribute("optimizedData");
-//
-//            if (optimizedData != null && optimizedData.containsKey(weekInt)) {
-//                allWeeksData.put(weekInt, optimizedData.get(weekInt));
-//            }
-//
-//            session.setAttribute("optimizedData", allWeeksData);
-//            request.setAttribute("optimizedData", allWeeksData);
-
-            // Handle team picks, results, and other processing
-            System.out.println("HomeServlet: Calculating teamPickCounts and teamResults");
             Map<String, Integer> teamPickCounts = new HashMap<>();
             Map<String, Boolean> teamResults = new HashMap<>();
             calculateTeamPickCountsAndResults(allWeeksData, weekInt, teamPickCounts, teamResults,
                     (Map<String, String>) session.getAttribute("teamNameToAbbrev"));
 
-            System.out.println("HomeServlet: Fetching user full names");
-            Map<String, String> userFullNames = getUserFullNames(
-                    (List<String>) session.getAttribute("allUsers"), context);
-
+            Map<String, String> userFullNames = getUserFullNames((List<String>) session.getAttribute("allUsers"), context);
             boolean userHasPaid = sqlConnectorUserTable.hasUserPaidForSeason(
                     (Integer) session.getAttribute("userId"), seasonInt);
 
@@ -202,19 +116,19 @@ public class HomeServlet {
                     (Map<Integer, Map<String, String>>) context.getAttribute("gameWinners"),
                     teamPickCounts, teamResults);
 
-            System.out.println("HomeServlet: Forwarding to JSP");
-
             long endTime = System.nanoTime();
             double durationInSeconds = (endTime - startTime) / 1_000_000_000.0;
             System.out.println("HomeServlet.doGet Method execution time: " + String.format("%.1f", durationInSeconds) + " Seconds");
 
             return "home";
+
         } catch (Exception e) {
             System.out.println("HomeServlet: Unhandled exception occurred");
             e.printStackTrace();
             return "error";
         }
     }
+
     
     @PostMapping("/HomeServlet")
     public String doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
