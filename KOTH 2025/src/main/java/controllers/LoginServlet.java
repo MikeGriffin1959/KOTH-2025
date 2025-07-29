@@ -1,6 +1,8 @@
 package controllers;
 
 import java.io.IOException;
+import java.util.Map;
+
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -61,19 +63,31 @@ public class LoginServlet extends HttpServlet {
         String username = request.getParameter("userName");
         String password = request.getParameter("password");
 
-        LoginResult result = sqlConnectorUserTable.authenticateUser(username, password);
+        LoginResult result = sqlConnectorUserTable.isValidUser(username, password);
 
         if (result == LoginResult.SUCCESS) {
             User user = sqlConnectorUserTable.getUserByUsername(username);
 
-            HttpSession session = request.getSession();
-            session.setAttribute("userName", username);
-            session.setAttribute("userId", user.getIdUser());
-            session.setAttribute("admin", user.isAdmin());
-            session.setAttribute("commish", user.isCommish());
+            if (user != null) {
+                // Fetch roles
+                Map<String, Boolean> roles = sqlConnectorUserTable.getUserRoles(username);
 
-            response.sendRedirect("HomeServlet");
+                // Set session attributes
+                HttpSession session = request.getSession(true);
+                session.setAttribute("userName", user.getUsername());
+                session.setAttribute("userId", user.getIdUser());
+                session.setAttribute("isAdmin", roles.getOrDefault("isAdmin", false));
+                session.setAttribute("isCommish", roles.getOrDefault("isCommish", false));
+
+                // Redirect to home page
+                response.sendRedirect("home.jsp");
+            } else {
+                // Handle user not found
+                request.setAttribute("errorMessage", "User not found.");
+                request.getRequestDispatcher("login.jsp").forward(request, response);
+            }
         } else {
+            // Handle invalid login
             request.setAttribute("errorMessage", "Invalid username or password.");
             request.getRequestDispatcher("login.jsp").forward(request, response);
         }
