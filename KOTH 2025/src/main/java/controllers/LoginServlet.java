@@ -52,7 +52,8 @@ public class LoginServlet extends HttpServlet {
             request.setAttribute("message", "Sign up successful! Please log in.");
         }
 
-        request.getRequestDispatcher("login.jsp").forward(request, response);
+           response.sendRedirect(request.getContextPath() + "/HomeServlet");
+
     }
 
     @Override
