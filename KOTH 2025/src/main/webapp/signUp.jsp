@@ -180,10 +180,11 @@
 					    <label for="initialPicks">Number of Initial Picks</label>
 					    <select class="form-control" id="initialPicks" name="initialPicks">
 					        <c:forEach begin="1" end="${maxPicks}" var="i">
-					            <option value="${i}" ${initialPicks == i ? 'selected' : ''}>${i}</option>
+					            <option value="${i}" <c:if test="${initialPicks eq i}">selected</c:if>>${i}</option>
 					        </c:forEach>
 					    </select>
 					</div>
+
 					
 					<div class="mb-3">
 					    <span class="badge badge-primary badge-pill" id="selectedPrice" style="font-size: 1.25rem;">$${pickPrice1}.00</span>

@@ -34,13 +34,12 @@ public class SignUpServlet {
     public String doGet(Model model) {
         // Get current year for season
         int currentSeason = Calendar.getInstance().get(Calendar.YEAR);
-        
+
         // Get pick prices for current season
         List<PicksPrice> picksPrices = sqlConnectorPicksPriceTable.getPickPrices(currentSeason);
-        
+
         if (!picksPrices.isEmpty()) {
             PicksPrice currentPrices = picksPrices.get(0);
-            // Make sure maxPicks is explicitly cast to an integer
             model.addAttribute("maxPicks", currentPrices.getMaxPicks());
             model.addAttribute("pickPrice1", currentPrices.getPickPrice1());
             model.addAttribute("pickPrice2", currentPrices.getPickPrice2());
@@ -48,9 +47,11 @@ public class SignUpServlet {
             model.addAttribute("pickPrice4", currentPrices.getPickPrice4());
             model.addAttribute("pickPrice5", currentPrices.getPickPrice5());
         } else {
-            // Set a default value if no prices are found
-            model.addAttribute("maxPicks", 5); 
+            model.addAttribute("maxPicks", 5); // Default
         }
+
+        // Default initial picks to 1 if not set
+        model.addAttribute("initialPicks", 1);
 
         // Add password requirements to the model for use in JSP
         model.addAttribute("passwordRegex", PasswordValidator.getJavaScriptRegex());
@@ -59,7 +60,7 @@ public class SignUpServlet {
     }
 
     @PostMapping("/SignUpServlet")
-    public String doPost(HttpServletRequest request, HttpServletResponse response, Model model, RedirectAttributes redirectAttributes) 
+    public String doPost(HttpServletRequest request, HttpServletResponse response, Model model, RedirectAttributes redirectAttributes)
             throws ServletException, IOException {
         System.out.println("SignUpServlet.doPost() called");
 
@@ -79,7 +80,7 @@ public class SignUpServlet {
         model.addAttribute("email", email);
         model.addAttribute("cellNumber", cellNumber);
         model.addAttribute("initialPicks", initialPicksStr);
-        
+
         // Add password requirements to model
         model.addAttribute("passwordRegex", PasswordValidator.getJavaScriptRegex());
         model.addAttribute("passwordRequirements", PasswordValidator.getRequirements());
@@ -130,7 +131,7 @@ public class SignUpServlet {
             userPicks.setInitialPicks(initialPicks);
             userPicks.setPicksSeason(currentSeason);
             userPicks.setPicksPaid(false);
-            
+
             sqlConnectorUserTable.addUserPicks(userPicks);
 
             // Redirect to login with success message
