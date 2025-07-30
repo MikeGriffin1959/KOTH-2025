@@ -1,18 +1,22 @@
 package controllers;
 
 import helpers.*;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 import model.Game;
 import services.NFLGameFetcherService;
 import services.ServletUtility;
+import services.CommonProcessingService;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -26,24 +30,27 @@ public class MakePicksServlet {
     private final SqlConnectorGameTable sqlConnectorGameTable;
     private final SqlConnectorTeamsTable sqlConnectorTeamsTable;
     private final SqlConnectorPicksTable sqlConnectorPicksTable;
-    private final NFLGameFetcherService nflGameFetcherService; 
-    
+    private final NFLGameFetcherService nflGameFetcherService;
+
     @Autowired
-    private ServletUtility servletUtility; // ✅ Injected instead of static calls
-    
+    private ServletUtility servletUtility;
+
+    @Autowired
+    private CommonProcessingService commonProcessingService; // ✅ Added
+
     private static final String STATUS_FINAL = "Final";
     private static final String STATUS_SCHEDULED = "Scheduled";
     private static final String STATUS_IN_PROGRESS = "In Progress";
 
     @Autowired
     public MakePicksServlet(SqlConnectorGameTable sqlConnectorGameTable,
-                           SqlConnectorTeamsTable sqlConnectorTeamsTable,
-                           SqlConnectorPicksTable sqlConnectorPicksTable,
-                           NFLGameFetcherService nflGameFetcherService) {  
+                             SqlConnectorTeamsTable sqlConnectorTeamsTable,
+                             SqlConnectorPicksTable sqlConnectorPicksTable,
+                             NFLGameFetcherService nflGameFetcherService) {
         this.sqlConnectorGameTable = sqlConnectorGameTable;
         this.sqlConnectorTeamsTable = sqlConnectorTeamsTable;
         this.sqlConnectorPicksTable = sqlConnectorPicksTable;
-        this.nflGameFetcherService = nflGameFetcherService;  
+        this.nflGameFetcherService = nflGameFetcherService;
     }
 
     private static String convertStatus(String dbStatus) {
@@ -54,8 +61,8 @@ public class MakePicksServlet {
             case "STATUS_SCHEDULED":
                 return STATUS_SCHEDULED;
             case "STATUS_IN_PROGRESS":
-            case "STATUS_HALFTIME":  
-            case "STATUS_END_PERIOD":              	
+            case "STATUS_HALFTIME":
+            case "STATUS_END_PERIOD":
                 return STATUS_IN_PROGRESS;
             default:
                 return dbStatus;
@@ -73,18 +80,13 @@ public class MakePicksServlet {
             return "redirect:/login";
         }
 
-        // ✅ Use injected ServletUtility instead of static
         servletUtility.setCommonAttributes(request, request.getServletContext());
 
         String season = (String) request.getAttribute("season");
         String week = (String) request.getAttribute("week");
 
-        if (season == null) {
-            season = (String) request.getServletContext().getAttribute("currentSeason");
-        }
-        if (week == null) {
-            week = (String) request.getServletContext().getAttribute("currentWeek");
-        }
+        if (season == null) season = (String) request.getServletContext().getAttribute("currentSeason");
+        if (week == null) week = (String) request.getServletContext().getAttribute("currentWeek");
 
         System.out.println("MakePicksServlet: Retrieved attributes - Season: " + season + ", Week: " + week);
 
@@ -95,7 +97,6 @@ public class MakePicksServlet {
         Integer userId = (Integer) session.getAttribute("userId");
 
         if (userId == null) {
-            System.out.println("MakePicksServlet: User ID not found in session");
             model.addAttribute("errorMessage", "User ID not found.");
             return "error";
         }
@@ -104,9 +105,25 @@ public class MakePicksServlet {
         Map<String, Integer> userRemainingPicksPriorWeek =
                 (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
 
+        // ✅ If missing, recalculate before redirecting
         if (userRemainingPicksPriorWeek == null || userRemainingPicksPriorWeek.isEmpty()) {
-            System.out.println("MakePicksServlet: userRemainingPicksPriorWeek is null or empty, redirecting to HomeServlet");
-            return "redirect:/HomeServlet";
+            System.out.println("MakePicksServlet: Prior week picks missing, recalculating...");
+            commonProcessingService.ensureSessionData(session, request.getServletContext());
+
+            ServletContext servletContext = request.getServletContext();
+            @SuppressWarnings("unchecked")
+            Map<String, Integer> refreshedPriorWeek =
+                (Map<String, Integer>) servletContext.getAttribute("userRemainingPicksPriorWeek");
+            session.setAttribute("userRemainingPicksPriorWeek", refreshedPriorWeek);
+
+            userRemainingPicksPriorWeek = refreshedPriorWeek;
+
+
+            if (userRemainingPicksPriorWeek == null || userRemainingPicksPriorWeek.isEmpty()) {
+                System.out.println("MakePicksServlet: Still missing after recalculation, showing error");
+                model.addAttribute("errorMessage", "Unable to load required user data. Please refresh or go to Home first.");
+                return "error";
+            }
         }
 
         int remainingPicks = userRemainingPicksPriorWeek.getOrDefault(userName, 0);
@@ -115,7 +132,6 @@ public class MakePicksServlet {
         try {
             // ✅ Fetch ESPN games for current week and update DB
             List<Game> espnGames = nflGameFetcherService.fetchCurrentWeekGames();
-            System.out.println("MakePicksServlet: Fetched " + espnGames.size() + " games for current week");
             sqlConnectorGameTable.updateGameTableMinimal(espnGames);
 
             // ✅ Retrieve data for display
@@ -137,8 +153,7 @@ public class MakePicksServlet {
             model.addAttribute("currentWeek", week);
 
             long endTime = System.nanoTime();
-            double durationInSeconds = (endTime - startTime) / 1_000_000_000.0;
-            System.out.printf("MakePicksServlet.doGet Method execution time: %.1f Seconds%n", durationInSeconds);
+            System.out.printf("MakePicksServlet.doGet execution time: %.1f Seconds%n", (endTime - startTime) / 1_000_000_000.0);
 
             return "makePicks";
 
@@ -149,15 +164,12 @@ public class MakePicksServlet {
         }
     }
 
- 
     @PostMapping("/MakePicksServlet")
     public String doPost(HttpServletRequest request, HttpServletResponse response, Model model) throws ServletException, IOException {
         System.out.println("MakePicksServlet: doPost method started");
-        long startTime = System.nanoTime();
 
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("userName") == null) {
-            System.out.println("MakePicksServlet: No valid session found, redirecting to login");
             return "redirect:/login";
         }
 
@@ -203,12 +215,9 @@ public class MakePicksServlet {
             request.setAttribute("errorMessage", "Error updating picks: " + e.getMessage());
         }
 
-        long endTime = System.nanoTime();
-        System.out.printf("MakePicksServlet.doPost Method execution time: %.1f Seconds%n", (endTime - startTime) / 1_000_000_000.0);
-
         return doGet(request, response, model);
     }
-    
+
     private Map<String, List<String>> parsePicksFromRequest(HttpServletRequest request, int remainingPicks) {
         Map<String, List<String>> newPicks = new HashMap<>();
         int totalPicksSubmitted = 0;
@@ -242,125 +251,58 @@ public class MakePicksServlet {
 
         return totalPicksSubmitted > remainingPicks ? null : newPicks;
     }
-    
+
     private void updateOddsForScheduledGames(List<Game> games) {
-        System.out.println("\nMakePicksServlet.updateOddsForScheduledGames: Starting odds update for scheduled games");
-        int scheduledGamesCount = 0;
-        int updatedGamesCount = 0;
-        
-        System.out.println("Total games to check: " + games.size());
-        
         for (Game game : games) {
-            System.out.println("\nChecking game: GameID=" + game.getGameID() + ", Status=" + game.getStatus());
-            
-            // Handle both "STATUS_SCHEDULED" and "Scheduled"
             if ("STATUS_SCHEDULED".equals(game.getStatus()) || "Scheduled".equals(game.getStatus())) {
-                scheduledGamesCount++;
                 try {
                     String gameId = String.valueOf(game.getGameID());
-                    System.out.println("Processing odds for GameID: " + gameId);
-                    
                     String oddsResponse = ApiFetchers.FetchESPNGameOdds(gameId);
                     if (oddsResponse != null && !oddsResponse.isEmpty()) {
-                        System.out.println("Received odds response for GameID: " + gameId + 
-                                         "\nResponse length: " + oddsResponse.length());
                         Game updatedGame = ApiParsers.ParseESPNOdds(oddsResponse, game);
-                        
-                        // Only update if we actually got odds data
-                        if (updatedGame.getPointSpread() != null || updatedGame.getOverUnder() != null) {
-                            sqlConnectorGameTable.updateGameOdds(updatedGame);
-                            updatedGamesCount++;
-                        } else {
-                            System.out.println("No valid odds data found for GameID: " + gameId);
-                        }
-                    } else {
-                        System.out.println("No odds response received for GameID: " + gameId);
+                        sqlConnectorGameTable.updateGameOdds(updatedGame);
                     }
                 } catch (Exception e) {
-                    System.err.println("Error updating odds for GameID " + game.getGameID());
-                    System.err.println("Error message: " + e.getMessage());
-                    e.printStackTrace();
+                    System.err.println("Error updating odds for GameID " + game.getGameID() + ": " + e.getMessage());
                 }
-            } else {
-                System.out.println("Skipping game: " + game.getGameID() + " - Status is " + game.getStatus());
             }
         }
-        
-        System.out.println("\nMakePicksServlet.updateOddsForScheduledGames: Completed odds update" +
-                          "\n Total games checked: " + games.size() +
-                          "\n Total scheduled games found: " + scheduledGamesCount +
-                          "\n Successfully updated games: " + updatedGamesCount);
     }
-    
+
     private void processGameStatus(List<Game> games) {
         DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
-        
         for (Game game : games) {
             try {
-                // Convert date/time
                 String utcDate = game.getDate();
-                System.out.println("Processing game date/time - Original UTC: " + utcDate);
-                
                 if (utcDate != null && !utcDate.isEmpty()) {
                     LocalDateTime utcDateTime = LocalDateTime.parse(utcDate.replace("Z", ""), formatter);
-                    ZonedDateTime utcZoned = utcDateTime.atZone(ZoneId.of("UTC"));
-                    ZonedDateTime easternZoned = utcZoned.withZoneSameInstant(ZoneId.of("America/New_York"));
+                    ZonedDateTime easternZoned = utcDateTime.atZone(ZoneId.of("UTC")).withZoneSameInstant(ZoneId.of("America/New_York"));
                     game.setDate(easternZoned.toString());
-                    System.out.println("Converted to Eastern: " + easternZoned);
                 }
 
-                // Convert status
                 String dbStatus = game.getStatus();
                 String convertedStatus = convertStatus(dbStatus);
-                System.out.println("Game " + game.getGameID() + " - Converting status from: " + dbStatus + " to: " + convertedStatus);
                 game.setStatus(convertedStatus);
-
-                // Set display flags based on status
                 updateGameDisplayFlags(game);
 
             } catch (Exception e) {
                 System.err.println("Error processing game " + game.getGameID() + ": " + e.getMessage());
-                e.printStackTrace();
             }
         }
     }
 
     private void updateGameDisplayFlags(Game game) {
         String status = game.getStatus();
-        
-        // Default values
         game.setShowOdds(false);
         game.setShowScore(false);
 
         switch (status) {
             case STATUS_SCHEDULED:
                 game.setShowOdds(true);
-                System.out.println("Game " + game.getGameID() + ": Showing odds (Spread: " + 
-                                 game.getPointSpread() + ", O/U: " + game.getOverUnder() + ")");
                 break;
-                
             case STATUS_IN_PROGRESS:
-                game.setShowScore(true);
-                System.out.println("Game " + game.getGameID() + ": Showing score (" + 
-                                 game.getAwayTeamName() + ": " + game.getAwayScore() + ", " +
-                                 game.getHomeTeamName() + ": " + game.getHomeScore() + ")");
-                
-                // Add game clock info for in-progress games
-                if (game.getDisplayClock() != null && game.getPeriod() != null) {
-                    System.out.println("Game " + game.getGameID() + ": " + 
-                                     "Quarter " + game.getPeriod() + " - " + game.getDisplayClock());
-                }
-                break;
-                
             case STATUS_FINAL:
                 game.setShowScore(true);
-                System.out.println("Game " + game.getGameID() + ": Final score (" + 
-                                 game.getAwayTeamName() + ": " + game.getAwayScore() + ", " +
-                                 game.getHomeTeamName() + ": " + game.getHomeScore() + ")");
-                break;
-                
-            default:
-                System.out.println("Game " + game.getGameID() + ": Unknown status - " + status);
                 break;
         }
     }
