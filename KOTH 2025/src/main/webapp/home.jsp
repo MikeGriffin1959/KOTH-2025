@@ -37,14 +37,28 @@ for (int i = startWeek; i <= endWeek; i++) {
 Boolean userHasPaid = (Boolean) request.getAttribute("userHasPaid");
 
 // Retrieve other data attributes
-Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData = 
+Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData =
     (Map<Integer, Map<String, List<Map<String, Object>>>>) request.getAttribute("optimizedData");
+if (optimizedData == null) optimizedData = new HashMap<>();
+
 Map<String, Integer> initialPicks = (Map<String, Integer>) request.getAttribute("initialPicks");
+if (initialPicks == null) initialPicks = new HashMap<>();
+
 Map<String, Integer> userLosses = (Map<String, Integer>) request.getAttribute("userLosses");
+if (userLosses == null) userLosses = new HashMap<>();
+
 Map<String, String> teamNameToAbbrev = (Map<String, String>) request.getAttribute("teamNameToAbbrev");
+if (teamNameToAbbrev == null) teamNameToAbbrev = new HashMap<>();
+
 List<String> allUsers = (List<String>) request.getAttribute("allUsers");
+if (allUsers == null) allUsers = new ArrayList<>();
+
 Map<String, String> userFullNames = (Map<String, String>) request.getAttribute("userFullNames");
+if (userFullNames == null) userFullNames = new HashMap<>();
+
 Map<String, Boolean> teamResults = (Map<String, Boolean>) request.getAttribute("teamResults");
+if (teamResults == null) teamResults = new HashMap<>();
+
 %>
 
 <%!

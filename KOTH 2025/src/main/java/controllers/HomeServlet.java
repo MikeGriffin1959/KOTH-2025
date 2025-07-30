@@ -49,6 +49,7 @@ public class HomeServlet {
 
     @GetMapping({"/", "/home", "/index", "/HomeServlet"})
     public String doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+
         System.out.println("HomeServlet: doGet() started");
         long startTime = System.nanoTime();
 
@@ -64,6 +65,10 @@ public class HomeServlet {
             // ✅ Always set common attributes for consistency
             servletUtility.setCommonAttributes(request, context);
 
+            // ✅ Ensure all critical session data (allUsers, initialPicks, userRemainingPicks) is available
+            commonProcessingService.ensureSessionData(session, context);
+
+            // ✅ Retrieve season/week
             String seasonStr = (String) request.getAttribute("season");
             String weekStr = (String) request.getAttribute("week");
 
@@ -83,28 +88,33 @@ public class HomeServlet {
             int seasonInt = Integer.parseInt(seasonStr);
             int weekInt = Integer.parseInt(weekStr);
 
-            // ✅ Fetch current week games
+            // ✅ Fetch current week games & update DB
             List<Game> parsedGames = nflGameFetcherService.fetchCurrentWeekGames();
             sqlConnectorGameTable.updateGameTableMinimal(parsedGames);
 
             Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData =
                     sqlConnectorPicksTable.getPicksForAllWeeks(seasonInt, weekInt);
 
+            // ✅ Calculate team pick counts and results
             Map<String, Integer> teamPickCounts = new HashMap<>();
             Map<String, Boolean> teamResults = new HashMap<>();
             calculateTeamPickCountsAndResults(allWeeksData, weekInt, teamPickCounts, teamResults,
-                    (Map<String, String>) session.getAttribute("teamNameToAbbrev"));
+            	    (Map<String, String>) request.getServletContext().getAttribute("teamNameToAbbrev"));
 
-            Map<String, String> userFullNames = getUserFullNames((List<String>) session.getAttribute("allUsers"), context);
+            // ✅ Prepare user full names
+            List<String> allUsers = (List<String>) session.getAttribute("allUsers");
+            Map<String, String> userFullNames = getUserFullNames(allUsers, context);
+
             boolean userHasPaid = sqlConnectorUserTable.hasUserPaidForSeason(
                     (Integer) session.getAttribute("userId"), seasonInt);
 
+            // ✅ Set attributes for JSP
             setRequestAttributes(request, seasonStr, weekStr, allWeeksData,
                     (Map<String, Integer>) session.getAttribute("initialPicks"),
                     (Map<String, Integer>) session.getAttribute("userLosses"),
                     (Map<String, Integer>) session.getAttribute("userRemainingPicks"),
                     (Map<String, String>) session.getAttribute("teamNameToAbbrev"),
-                    (List<String>) session.getAttribute("allUsers"),
+                    allUsers,
                     (Integer) session.getAttribute("totalPot"),
                     (Integer) session.getAttribute("usersWithRemainingPicks"),
                     (Integer) session.getAttribute("totalRemainingPicks"),
@@ -114,7 +124,7 @@ public class HomeServlet {
                     teamPickCounts, teamResults);
 
             long endTime = System.nanoTime();
-            System.out.printf("HomeServlet.doGet Method execution time: %.1f Seconds%n",
+            System.out.printf("HomeServlet.doGet execution time: %.1f Seconds%n",
                     (endTime - startTime) / 1_000_000_000.0);
 
             return "home";
@@ -125,6 +135,7 @@ public class HomeServlet {
             return "error";
         }
     }
+
 
     @PostMapping("/HomeServlet")
     public String doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -198,6 +209,13 @@ public class HomeServlet {
 	                                           int currentWeekInt, Map<String, Integer> teamPickCounts,
 	                                           Map<String, Boolean> teamResults,
 	                                           Map<String, String> teamNameToAbbrev) {
+		
+		if (teamNameToAbbrev == null) {
+	        System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
+	        return;
+	    }
+		
+		
 	    Map<String, List<Map<String, Object>>> weekData = optimizedData.get(currentWeekInt);
 	    if (weekData == null) return;
 	

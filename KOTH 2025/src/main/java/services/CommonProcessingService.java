@@ -180,9 +180,15 @@ public class CommonProcessingService {
     public void updateTeamData(ServletContext servletContext) {
         System.out.println("CommonProcessingService.updateTeamData method started");
         Map<String, String> teamNameToAbbrev = sqlConnectorTeamsTable.getTeamNameToAbbrev();
-        servletContext.setAttribute("teamNameToAbbrev", teamNameToAbbrev);
-        System.out.println("  Updated team data, total teams: " + teamNameToAbbrev.size());
+        if (teamNameToAbbrev == null || teamNameToAbbrev.isEmpty()) {
+            System.err.println("WARNING: Team name map is NULL or EMPTY. Check DB.");
+        } else {
+            System.out.println("Updated team data, total teams: " + teamNameToAbbrev.size());
+        }
+        servletContext.setAttribute("teamNameToAbbrev", teamNameToAbbrev != null ? teamNameToAbbrev : new HashMap<>());
     }
+
+
 
     public void updateUserData(ServletContext servletContext) {
         System.out.println("CommonProcessingService.updateUserData method started");
@@ -784,5 +790,39 @@ public class CommonProcessingService {
         System.out.println("Remaining picks: " + remainingPicks);
 
         return new PicksCalculationResult(userLosses, remainingPicks);
+    }
+    public void ensureSessionData(HttpSession session, ServletContext servletContext) {
+        System.out.println("CommonProcessingService.ensureSessionData() called");
+
+        updateSeasonAndWeek(servletContext);
+        updateTeamData(servletContext);
+        updateUserData(servletContext);
+        updatePicksData(servletContext);
+        updateGameData(servletContext);
+        updateGameWinners(servletContext);
+
+        @SuppressWarnings("unchecked")
+        Map<String, String> teamNameToAbbrev = (Map<String, String>) servletContext.getAttribute("teamNameToAbbrev");
+        if (teamNameToAbbrev == null) {
+            System.out.println("WARNING: teamNameToAbbrev is null after update. Initializing empty map.");
+            teamNameToAbbrev = new HashMap<>();
+            servletContext.setAttribute("teamNameToAbbrev", teamNameToAbbrev);
+        }
+
+        @SuppressWarnings("unchecked")
+        List<User> allSeasonUsers = (List<User>) servletContext.getAttribute("allSeasonUsers");
+        @SuppressWarnings("unchecked")
+        Map<String, Integer> initialPicks = (Map<String, Integer>) servletContext.getAttribute("initialPicks");
+        @SuppressWarnings("unchecked")
+        Map<String, Integer> userRemainingPicks = (Map<String, Integer>) servletContext.getAttribute("userRemainingPicks");
+
+        if (allSeasonUsers == null || initialPicks == null || userRemainingPicks == null) {
+            throw new IllegalStateException("Critical session data missing after refresh.");
+        }
+
+        session.setAttribute("allUsers", allSeasonUsers.stream().map(User::getUsername).toList());
+        session.setAttribute("initialPicks", initialPicks);
+        session.setAttribute("userRemainingPicks", userRemainingPicks);
+        session.setAttribute("teamNameToAbbrev", teamNameToAbbrev); // ✅ Ensure session always has this
     }
 }
