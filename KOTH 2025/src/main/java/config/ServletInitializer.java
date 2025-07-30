@@ -24,13 +24,5 @@ public class ServletInitializer extends SpringBootServletInitializer {
     protected SpringApplicationBuilder configure(SpringApplicationBuilder application) {
         return application.sources(KOTH.class);
     }
-
-//    @PostConstruct
-//    public void init() {
-//        // Initialize static references in ServletUtility
-//        ServletUtility.setSqlConnectorPicksPriceTable(sqlConnectorPicksPriceTable);
-//        ServletUtility.setCommonProcessingService(commonProcessingService);
-//        System.out.println("ServletInitializer: Static dependencies set in ServletUtility");
-//    }
 }
 
