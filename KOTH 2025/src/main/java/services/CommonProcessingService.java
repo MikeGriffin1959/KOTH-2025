@@ -54,7 +54,8 @@ public class CommonProcessingService {
 
 
     @SuppressWarnings("unchecked")
-    public void processCommonData(HttpServletRequest request, HttpServletResponse response, ServletContext servletContext) throws ServletException, IOException {
+    public void processCommonData(HttpServletRequest request, HttpServletResponse response, ServletContext servletContext)
+            throws ServletException, IOException {
         System.out.println("CommonProcessingService.processCommonData method started");
 
         HttpSession httpSession = request.getSession(false);
@@ -76,6 +77,27 @@ public class CommonProcessingService {
         Boolean isCommish = (Boolean) httpSession.getAttribute("isCommish");
 
         System.out.println("  Name: " + userName + ", ID: " + userId + ", Admin: " + isAdmin + ", Commish: " + isCommish);
+
+        // ✅ Fetch allowSignUp from DB and set in application scope
+        try {
+            PicksPrice picksPrice = sqlConnectorPicksPriceTable
+                    .getPickPrices(season)
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+
+            if (picksPrice != null) {
+                boolean allowSignUp = picksPrice.isAllowSignUp();
+                servletContext.setAttribute("allowSignUp", allowSignUp);
+                System.out.println("CommonProcessingService: allowSignUp set to " + allowSignUp);
+            } else {
+                servletContext.setAttribute("allowSignUp", false);
+                System.out.println("CommonProcessingService: No PicksPrice found, default allowSignUp=false");
+            }
+        } catch (Exception e) {
+            System.err.println("Error fetching allowSignUp: " + e.getMessage());
+            servletContext.setAttribute("allowSignUp", false);
+        }
 
         // Retrieve or update cached data
         Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData = getCachedData(servletContext, "optimizedData");
@@ -120,10 +142,10 @@ public class CommonProcessingService {
         servletContext.setAttribute("remainingPicksWeekly", remainingPicksWeekly);
 
         // Set attributes in the session
-        setSessionAttributes(httpSession, servletContext, season, week, userName, userId, isAdmin, isCommish, 
-            result.totalPot, result.usersWithRemainingPicks, result.totalRemainingPicks, userRemainingPicks, userHasPaid, 
-            optimizedData, initialPicks, userLosses, teamNameToAbbrev, allUsers, games, gamesForWeek, 
-            remainingPicksWeekly);
+        setSessionAttributes(httpSession, servletContext, season, week, userName, userId, isAdmin, isCommish,
+                result.totalPot, result.usersWithRemainingPicks, result.totalRemainingPicks, userRemainingPicks, userHasPaid,
+                optimizedData, initialPicks, userLosses, teamNameToAbbrev, allUsers, games, gamesForWeek,
+                remainingPicksWeekly);
 
         // Set attributes in the request as well
         request.setAttribute("season", String.valueOf(season));
@@ -142,6 +164,7 @@ public class CommonProcessingService {
 
         System.out.println("CommonProcessingService.processCommonData() completed");
     }
+
 
     public void updateSeasonAndWeek(ServletContext servletContext) {
         System.out.println("CommonProcessingService.updateSeasonAndWeek method started");

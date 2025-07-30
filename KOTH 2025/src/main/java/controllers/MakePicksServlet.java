@@ -28,6 +28,9 @@ public class MakePicksServlet {
     private final SqlConnectorPicksTable sqlConnectorPicksTable;
     private final NFLGameFetcherService nflGameFetcherService; 
     
+    @Autowired
+    private ServletUtility servletUtility; // ✅ Injected instead of static calls
+    
     private static final String STATUS_FINAL = "Final";
     private static final String STATUS_SCHEDULED = "Scheduled";
     private static final String STATUS_IN_PROGRESS = "In Progress";
@@ -70,7 +73,8 @@ public class MakePicksServlet {
             return "redirect:/login";
         }
 
-        ServletUtility.setCommonAttributes(request, request.getServletContext());
+        // ✅ Use injected ServletUtility instead of static
+        servletUtility.setCommonAttributes(request, request.getServletContext());
 
         String season = (String) request.getAttribute("season");
         String week = (String) request.getAttribute("week");
@@ -109,27 +113,18 @@ public class MakePicksServlet {
         System.out.println("MakePicksServlet: Remaining picks for user " + userName + ": " + remainingPicks);
 
         try {
-            // ✅ Fetch filtered ESPN games for current week
-            System.out.println("MakePicksServlet: Fetching ESPN score data");
+            // ✅ Fetch ESPN games for current week and update DB
             List<Game> espnGames = nflGameFetcherService.fetchCurrentWeekGames();
             System.out.println("MakePicksServlet: Fetched " + espnGames.size() + " games for current week");
-
-            // ✅ Update DB with fresh game data
             sqlConnectorGameTable.updateGameTableMinimal(espnGames);
 
-            // ✅ Retrieve picks and teams
+            // ✅ Retrieve data for display
             Map<String, List<String>> selectedPicks = sqlConnectorPicksTable.getUserPicks(userId, seasonInt, weekInt);
             Map<String, String> teamNameToAbbrev = sqlConnectorTeamsTable.getTeamNameToAbbrev();
 
-            // ✅ Get games from DB (already filtered by season/week)
             List<Game> games = sqlConnectorGameTable.getGamesForWeek(seasonInt, weekInt);
-            System.out.println("MakePicksServlet: Retrieved " + games.size() + " games for Season: " + season + ", Week: " + week);
-
-            // ✅ Update odds for scheduled games
             updateOddsForScheduledGames(games);
             games = sqlConnectorGameTable.getGamesForWeek(seasonInt, weekInt);
-
-            // ✅ Process statuses and display flags
             processGameStatus(games);
 
             // ✅ Add attributes for JSP
@@ -149,7 +144,6 @@ public class MakePicksServlet {
 
         } catch (Exception e) {
             System.err.println("MakePicksServlet: Error processing request: " + e.getMessage());
-            e.printStackTrace();
             model.addAttribute("errorMessage", "Error processing request.");
             return "error";
         }
@@ -160,132 +154,94 @@ public class MakePicksServlet {
     public String doPost(HttpServletRequest request, HttpServletResponse response, Model model) throws ServletException, IOException {
         System.out.println("MakePicksServlet: doPost method started");
         long startTime = System.nanoTime();
-        
+
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("userName") == null) {
             System.out.println("MakePicksServlet: No valid session found, redirecting to login");
             return "redirect:/login";
         }
 
-        ServletUtility.setCommonAttributes(request, request.getServletContext());
+        servletUtility.setCommonAttributes(request, request.getServletContext());
 
         String season = (String) request.getAttribute("season");
         String week = (String) request.getAttribute("week");
 
-        System.out.println("MakePicksServlet: Retrieved attributes - Season: " + season + ", Week: " + week);
-
         if (season == null || week == null) {
-            System.out.println("MakePicksServlet: Missing required parameters");
             model.addAttribute("errorMessage", "Missing required parameters.");
             return "error";
         }
 
-        System.out.println("MakePicksServlet: Processing picks for Season: " + season + ", Week: " + week);
-
-        @SuppressWarnings("unused")
-		int seasonInt = Integer.parseInt(season);
-        @SuppressWarnings("unused")
-		int weekInt = Integer.parseInt(week);
-
         String userName = (String) session.getAttribute("userName");
         Integer userId = (Integer) session.getAttribute("userId");
-        
+
         if (userId == null) {
-            System.out.println("MakePicksServlet: User ID not found in session");
             model.addAttribute("errorMessage", "User ID not found.");
             return "error";
         }
 
-        // Get remaining picks from prior week
         @SuppressWarnings("unchecked")
-        Map<String, Integer> userRemainingPicksPriorWeek = 
-            (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
+        Map<String, Integer> userRemainingPicksPriorWeek =
+                (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
 
         if (userRemainingPicksPriorWeek == null || userRemainingPicksPriorWeek.isEmpty()) {
-            System.out.println("MakePicksServlet: userRemainingPicksPriorWeek is null or empty");
             model.addAttribute("errorMessage", "Unable to validate picks - missing prior week data.");
             return "error";
         }
 
         int remainingPicks = userRemainingPicksPriorWeek.getOrDefault(userName, 0);
-        System.out.println("MakePicksServlet: Prior week remaining picks for user " + userName + ": " + remainingPicks);
+        Map<String, List<String>> newPicks = parsePicksFromRequest(request, remainingPicks);
 
-        // Process the picks
+        if (newPicks == null) {
+            request.setAttribute("errorMessage", "Cannot submit more picks than remaining.");
+            return doGet(request, response, model);
+        }
+
+        try {
+            sqlConnectorPicksTable.updateUserPicks(userId, Integer.parseInt(season), Integer.parseInt(week), newPicks);
+            request.setAttribute("message", "Picks successfully updated!");
+        } catch (Exception e) {
+            request.setAttribute("errorMessage", "Error updating picks: " + e.getMessage());
+        }
+
+        long endTime = System.nanoTime();
+        System.out.printf("MakePicksServlet.doPost Method execution time: %.1f Seconds%n", (endTime - startTime) / 1_000_000_000.0);
+
+        return doGet(request, response, model);
+    }
+    
+    private Map<String, List<String>> parsePicksFromRequest(HttpServletRequest request, int remainingPicks) {
         Map<String, List<String>> newPicks = new HashMap<>();
         int totalPicksSubmitted = 0;
-        
-        // Get all form parameters
+
         Enumeration<String> parameterNames = request.getParameterNames();
         while (parameterNames.hasMoreElements()) {
             String paramName = parameterNames.nextElement();
             if (paramName.startsWith("pick_")) {
-                String gameId = paramName.substring(5); // Remove "pick_" prefix
-                String[] pickValues = request.getParameterValues(paramName); // Get all values for this parameter
-                
+                String gameId = paramName.substring(5);
+                String[] pickValues = request.getParameterValues(paramName);
+
                 if (pickValues != null) {
                     List<String> gamePicks = new ArrayList<>();
-                    
-                    System.out.println("Processing game " + gameId + " with " + pickValues.length + " picks"); // Debug log
-                    
                     for (String pickValue : pickValues) {
                         String[] parts = pickValue.split("_");
                         if (parts.length == 2) {
                             String teamName = parts[0];
                             int count = Integer.parseInt(parts[1]);
-                            System.out.println("  Team: " + teamName + ", Count: " + count); // Debug log
-                            
                             totalPicksSubmitted += count;
-                            
-                            // Add the team name to the list the specified number of times
                             for (int i = 0; i < count; i++) {
                                 gamePicks.add(teamName);
                             }
                         }
                     }
-                    
                     if (!gamePicks.isEmpty()) {
                         newPicks.put(gameId, gamePicks);
-                        System.out.println("Added picks for game " + gameId + ": " + gamePicks); // Debug log
                     }
                 }
             }
         }
 
-        // Validate total picks against remaining picks
-        if (totalPicksSubmitted > remainingPicks) {
-            String errorMessage = "Cannot submit " + totalPicksSubmitted + " picks when only " + remainingPicks + " picks remain from prior week.";
-            System.out.println("MakePicksServlet: " + errorMessage);
-            request.setAttribute("errorMessage", errorMessage);
-            return doGet(request, response, model);
-        }
-
-        // Update picks in database
-        try {
-            System.out.println("Total picks being submitted: " + totalPicksSubmitted);
-            
-            sqlConnectorPicksTable.updateUserPicks(
-                userId.intValue(), 
-                Integer.parseInt(season), 
-                Integer.parseInt(week), 
-                newPicks
-            );
-            
-            String message = "Picks successfully updated!";
-            request.setAttribute("message", message);
-        } catch (Exception e) {
-            String errorMessage = "Error updating picks: " + e.getMessage();
-            request.setAttribute("errorMessage", errorMessage);
-            e.printStackTrace();
-        }
-
-        long endTime = System.nanoTime();
-        double durationInSeconds = (endTime - startTime) / 1_000_000_000.0;
-        System.out.printf("MakePicksServlet.doPost Method execution time: %.1f Seconds%n", durationInSeconds);
-
-        // Return the view from doGet
-        return doGet(request, response, model);
+        return totalPicksSubmitted > remainingPicks ? null : newPicks;
     }
-
     
     private void updateOddsForScheduledGames(List<Game> games) {
         System.out.println("\nMakePicksServlet.updateOddsForScheduledGames: Starting odds update for scheduled games");

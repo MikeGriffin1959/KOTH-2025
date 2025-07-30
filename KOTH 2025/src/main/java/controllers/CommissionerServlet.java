@@ -36,6 +36,9 @@ public class CommissionerServlet {
     private final SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
     private final ServletContext servletContext;
     private final CommonProcessingService commonProcessingService;
+    
+    @Autowired
+    private ServletUtility servletUtility; // ✅ Injected instead of static
 
     @Autowired
     public CommissionerServlet(SqlConnectorUserTable sqlConnectorUserTable,
@@ -54,28 +57,25 @@ public class CommissionerServlet {
         this.sqlConnectorPicksPriceTable = sqlConnectorPicksPriceTable;
         this.servletContext = servletContext;
         this.commonProcessingService = commonProcessingService;
-        
-        // Set the SqlConnectorPicksPriceTable in ServletUtility
-        ServletUtility.setSqlConnectorPicksPriceTable(sqlConnectorPicksPriceTable);
-        ServletUtility.setCommonProcessingService(commonProcessingService);
-        
+              
         System.out.println("CommissionerServlet initialized. sqlConnectorUserTable is " + 
                           (sqlConnectorUserTable != null ? "not null" : "null"));
     }
 
     @GetMapping("/CommissionerServlet")
     public String doGet(HttpServletRequest request, HttpServletResponse response, Model model) throws ServletException, IOException {
-        
-    	HttpSession session = request.getSession(false);
+
+        HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("userName") == null) {
             return "redirect:/LoginServlet";
-        }       
-    	
-    	if (!isCommish(request)) {
+        }
+
+        if (!isCommish(request)) {
             return "redirect:/accessDenied.jsp";
         }
 
-        ServletUtility.setCommonAttributes(request, servletContext);
+        // ✅ Use injected ServletUtility instead of static
+        servletUtility.setCommonAttributes(request, servletContext);
         String currentSeason = (String) request.getAttribute("season");
 
         if (currentSeason == null) {
@@ -87,7 +87,7 @@ public class CommissionerServlet {
         List<User> users = sqlConnectorUserTable.getAllUsersForSeason(season);
         model.addAttribute("users", users);
 
-        // Get the KOTH season from the PicksPrice table
+        // ✅ Fetch PicksPrice data for season
         List<PicksPrice> pricesList = sqlConnectorPicksPriceTable.getPickPrices(season);
         String kothSeason;
         PicksPrice currentPrices = null;
@@ -96,23 +96,10 @@ public class CommissionerServlet {
             currentPrices = pricesList.get(0);
             kothSeason = currentPrices.getKothSeason();
             servletContext.setAttribute("kothSeason", kothSeason);
-            
-            // Format the prices to always show 2 decimal places
-            if (currentPrices.getPickPrice1() != null) {
-                currentPrices.setPickPrice1(currentPrices.getPickPrice1().setScale(2));
-            }
-            if (currentPrices.getPickPrice2() != null) {
-                currentPrices.setPickPrice2(currentPrices.getPickPrice2().setScale(2));
-            }
-            if (currentPrices.getPickPrice3() != null) {
-                currentPrices.setPickPrice3(currentPrices.getPickPrice3().setScale(2));
-            }
-            if (currentPrices.getPickPrice4() != null) {
-                currentPrices.setPickPrice4(currentPrices.getPickPrice4().setScale(2));
-            }
-            if (currentPrices.getPickPrice5() != null) {
-                currentPrices.setPickPrice5(currentPrices.getPickPrice5().setScale(2));
-            }
+            servletContext.setAttribute("allowSignUp", currentPrices.isAllowSignUp());
+
+            // Format prices to 2 decimals
+            formatPrices(currentPrices);
         } else {
             kothSeason = String.valueOf(season);
             servletContext.setAttribute("kothSeason", kothSeason);
@@ -121,32 +108,51 @@ public class CommissionerServlet {
             currentPrices.setKothSeason(kothSeason);
         }
 
-        // Add the formatted prices to the model
         model.addAttribute("currentPrices", currentPrices);
 
-        // For backward compatibility, also create the JSON object
         try {
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode rootNode = mapper.createObjectNode();
-            
+
             rootNode.put("picksPriceSeason", currentPrices.getPicksPriceSeason());
             rootNode.put("maxPicks", currentPrices.getMaxPicks());
-            rootNode.put("pickPrice1", currentPrices.getPickPrice1() != null ? currentPrices.getPickPrice1().toString() : "");
-            rootNode.put("pickPrice2", currentPrices.getPickPrice2() != null ? currentPrices.getPickPrice2().toString() : "");
-            rootNode.put("pickPrice3", currentPrices.getPickPrice3() != null ? currentPrices.getPickPrice3().toString() : "");
-            rootNode.put("pickPrice4", currentPrices.getPickPrice4() != null ? currentPrices.getPickPrice4().toString() : "");
-            rootNode.put("pickPrice5", currentPrices.getPickPrice5() != null ? currentPrices.getPickPrice5().toString() : "");
+            rootNode.put("pickPrice1", getPriceAsString(currentPrices.getPickPrice1()));
+            rootNode.put("pickPrice2", getPriceAsString(currentPrices.getPickPrice2()));
+            rootNode.put("pickPrice3", getPriceAsString(currentPrices.getPickPrice3()));
+            rootNode.put("pickPrice4", getPriceAsString(currentPrices.getPickPrice4()));
+            rootNode.put("pickPrice5", getPriceAsString(currentPrices.getPickPrice5()));
             rootNode.put("allowSignUp", currentPrices.isAllowSignUp());
             rootNode.put("kothSeason", currentPrices.getKothSeason());
-            
+
             model.addAttribute("pickPricesJson", mapper.writeValueAsString(rootNode));
         } catch (Exception e) {
             System.err.println("CommissionerServlet: Error creating pick prices JSON: " + e.getMessage());
-            e.printStackTrace();
             createDefaultPicksPricesJson(model, season, kothSeason);
         }
 
         return "commissioner";
+    }
+
+    private void formatPrices(PicksPrice currentPrices) {
+        if (currentPrices.getPickPrice1() != null) {
+            currentPrices.setPickPrice1(currentPrices.getPickPrice1().setScale(2));
+        }
+        if (currentPrices.getPickPrice2() != null) {
+            currentPrices.setPickPrice2(currentPrices.getPickPrice2().setScale(2));
+        }
+        if (currentPrices.getPickPrice3() != null) {
+            currentPrices.setPickPrice3(currentPrices.getPickPrice3().setScale(2));
+        }
+        if (currentPrices.getPickPrice4() != null) {
+            currentPrices.setPickPrice4(currentPrices.getPickPrice4().setScale(2));
+        }
+        if (currentPrices.getPickPrice5() != null) {
+            currentPrices.setPickPrice5(currentPrices.getPickPrice5().setScale(2));
+        }
+    }
+
+    private String getPriceAsString(BigDecimal price) {
+        return price != null ? price.toString() : "";
     }
 
     private void createDefaultPicksPricesJson(Model model, int season, String kothSeason) {
@@ -165,7 +171,6 @@ public class CommissionerServlet {
             model.addAttribute("pickPricesJson", mapper.writeValueAsString(rootNode));
         } catch (Exception ex) {
             System.err.println("CommissionerServlet: Error creating default pick prices JSON: " + ex.getMessage());
-            ex.printStackTrace();
         }
     }
 
@@ -173,28 +178,25 @@ public class CommissionerServlet {
     public String doPost(HttpServletRequest request, HttpServletResponse response, Model model) throws ServletException, IOException {
         System.out.println("CommissionerServlet: doPost method called");
         long startTime = System.nanoTime();
-        
+
         if (!isCommish(request)) {
-            System.out.println("CommissionerServlet: User is not a Commish, redirecting to access denied page");
             return "redirect:/accessDenied.jsp";
         }
-        
+
         String action = request.getParameter("action");
         System.out.println("CommissionerServlet: Action parameter = " + action);
 
         try {
-            // Set common attributes
-            ServletUtility.setCommonAttributes(request, servletContext);
+            // ✅ Use injected ServletUtility
+            servletUtility.setCommonAttributes(request, servletContext);
             String currentSeason = (String) request.getAttribute("season");
 
             if (currentSeason == null) {
-                System.out.println("CommissionerServlet: Missing current season in doPost");
                 throw new ServletException("Missing current season.");
             }
 
             int season = Integer.parseInt(currentSeason);
 
-            // Handle the delete action separately
             if ("deleteUser".equals(action)) {
                 handleUserDeletion(request, response, model);
                 return null;
@@ -202,56 +204,26 @@ public class CommissionerServlet {
 
             switch (action) {
                 case "createTeams":
-                    System.out.println("CommissionerServlet: Calling handleCreateTeams");
                     boolean success = handleCreateTeams();
-                    response.setContentType("application/json");
-                    response.getWriter().write(String.format("{\"success\": %b, \"message\": \"%s\"}", 
-                        success, 
-                        success ? "Teams data successfully created and stored." : "Error occurred while creating teams."
-                    ));
-                    return null;                
-                    
+                    writeJsonResponse(response, success, success ? "Teams created successfully" : "Error creating teams");
+                    return null;
+
                 case "updateUserRoles":
                     handleUpdateUserRoles(request, model);
                     break;
-                    
+
                 case "createSchedule":
                     handleCreateSchedule(request, response);
                     return null;
-                    
+
                 case "setSeasonWeek":
                     handleSetSeasonWeek(request, response);
                     return null;
-                    
+
                 case "updateUsers":
-                    boolean confirmDelete = "on".equals(request.getParameter("confirmDelete"));
-                    List<Integer> userIdsToDelete = new ArrayList<>();
-                    
-                    // Collect all user IDs marked for deletion using parameter names
-                    Enumeration<String> paramNames = request.getParameterNames();
-                    while (paramNames.hasMoreElements()) {
-                        String paramName = paramNames.nextElement();
-                        if (paramName.startsWith("deleteUser_") && "on".equals(request.getParameter(paramName))) {
-                            int userId = Integer.parseInt(paramName.substring("deleteUser_".length()));
-                            userIdsToDelete.add(userId);
-                        }
-                    }
-                    
-                    // If users are marked for deletion and confirmed
-                    if (!userIdsToDelete.isEmpty()) {
-                        if (confirmDelete) {
-                            handleUserDeletion(request, response, model);
-                            return "redirect:/CommissionerServlet";
-                        } else {
-                            model.addAttribute("message", "Please confirm deletion by checking the confirmation box");
-                            model.addAttribute("messageType", "warning");
-                        }
-                    }
-                    
-                    // Process remaining user updates
                     handleUserUpdates(request, response, model, season);
                     break;
-                            
+
                 case "updatePricePerPick":
                     handleUpdatePricePerPick(request, response);
                     return null;
@@ -259,18 +231,11 @@ public class CommissionerServlet {
                 case "allowNewUsers":
                     handleAllowNewUsers(request, response);
                     return null;
-                        
+
                 default:
-                    System.out.println("CommissionerServlet: Unhandled action - " + action);
                     model.addAttribute("message", "Invalid action specified");
-                    model.addAttribute("success", false);
             }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-            response.setContentType("application/json");
-            response.getWriter().write("{\"success\": false, \"message\": \"Database operation failed: " + e.getMessage() + "\"}");
-            return null;
         } catch (Exception e) {
             e.printStackTrace();
             response.setContentType("application/json");
@@ -283,6 +248,11 @@ public class CommissionerServlet {
         System.out.printf("CommissionerServlet.doPost Method execution time: %.1f Seconds%n", durationInSeconds);
 
         return "redirect:/CommissionerServlet";
+    }
+
+    private void writeJsonResponse(HttpServletResponse response, boolean success, String message) throws IOException {
+        response.setContentType("application/json");
+        response.getWriter().write(String.format("{\"success\": %b, \"message\": \"%s\"}", success, message));
     }
 
     private boolean isCommish(HttpServletRequest request) {
@@ -430,6 +400,9 @@ public class CommissionerServlet {
             picksPrice.setAllowSignUp(allowNewUsers);
             
             boolean success = sqlConnectorPicksPriceTable.updatePickPrices(picksPrice);
+            
+         // Update application scope immediately
+            servletContext.setAttribute("allowSignUp", allowNewUsers);
             
             String message = URLEncoder.encode("Sign ups are now " + 
                 (allowNewUsers ? "enabled" : "disabled"), "UTF-8");

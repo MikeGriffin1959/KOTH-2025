@@ -31,18 +31,21 @@ public class HomeServlet {
 
     @Autowired
     private CommonProcessingService commonProcessingService;
-    
+
     @Autowired
     private SqlConnectorGameTable sqlConnectorGameTable;
-    
+
     @Autowired
     private SqlConnectorPicksTable sqlConnectorPicksTable;
-    
+
     @Autowired
     private SqlConnectorUserTable sqlConnectorUserTable;
-    
+
     @Autowired
     private NFLGameFetcherService nflGameFetcherService;
+
+    @Autowired
+    private ServletUtility servletUtility;  // ✅ Inject instead of static calls
 
     @GetMapping({"/", "/home", "/index", "/HomeServlet"})
     public String doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -58,12 +61,11 @@ public class HomeServlet {
 
             ServletContext context = request.getServletContext();
 
-            if (request.getAttribute("commonProcessingDone") == null) {
-                commonProcessingService.processCommonData(request, response, context);
-            }
+            // ✅ Always set common attributes for consistency
+            servletUtility.setCommonAttributes(request, context);
 
             String seasonStr = (String) request.getAttribute("season");
-            String weekStr = (String) request.getAttribute("currentWeek");
+            String weekStr = (String) request.getAttribute("week");
 
             if (seasonStr == null) seasonStr = (String) session.getAttribute("season");
             if (weekStr == null) weekStr = (String) session.getAttribute("currentWeek");
@@ -81,15 +83,10 @@ public class HomeServlet {
             int seasonInt = Integer.parseInt(seasonStr);
             int weekInt = Integer.parseInt(weekStr);
 
-            // ✅ Fetch current week games from ESPN API (filtered)
-            System.out.println("HomeServlet.doGet: Fetching filtered games");
+            // ✅ Fetch current week games
             List<Game> parsedGames = nflGameFetcherService.fetchCurrentWeekGames();
-            System.out.println("HomeServlet: Parsed " + parsedGames.size() + " valid games");
-
-            // ✅ Update DB with latest ESPN data
             sqlConnectorGameTable.updateGameTableMinimal(parsedGames);
 
-            // ✅ Fetch all picks and update page
             Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData =
                     sqlConnectorPicksTable.getPicksForAllWeeks(seasonInt, weekInt);
 
@@ -117,8 +114,8 @@ public class HomeServlet {
                     teamPickCounts, teamResults);
 
             long endTime = System.nanoTime();
-            double durationInSeconds = (endTime - startTime) / 1_000_000_000.0;
-            System.out.println("HomeServlet.doGet Method execution time: " + String.format("%.1f", durationInSeconds) + " Seconds");
+            System.out.printf("HomeServlet.doGet Method execution time: %.1f Seconds%n",
+                    (endTime - startTime) / 1_000_000_000.0);
 
             return "home";
 
@@ -129,27 +126,19 @@ public class HomeServlet {
         }
     }
 
-    
     @PostMapping("/HomeServlet")
     public String doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        System.out.println("HomeServlet: doPost() called, delegating to doGet()");
         return doGet(request, response);
     }
 
-
-
     private Map<String, String> getUserFullNames(List<String> usernames, ServletContext context) {
-        System.out.println("HomeServlet: getUserFullNames method started");
-    	
         Map<String, String> fullNames = new HashMap<>();
         for (String username : usernames) {
-            User user = ServletUtility.getUserFromContext(context, username);
+            User user = servletUtility.getUserFromContext(context, username); // ✅ No longer static
             if (user != null) {
-                String fullName = user.getFirstName() + " " + user.getLastName();
-                fullNames.put(username, fullName);
+                fullNames.put(username, user.getFirstName() + " " + user.getLastName());
             } else {
-                fullNames.put(username, username); // Fallback to username if user not found
-                System.out.println("HomeServlet: User not found in context for username: " + username);
+                fullNames.put(username, username);
             }
         }
         return fullNames;

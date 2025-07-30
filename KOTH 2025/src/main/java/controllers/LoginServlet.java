@@ -2,37 +2,44 @@ package controllers;
 
 import java.io.IOException;
 import java.util.Map;
-
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+
 import helpers.LoginResult;
 import helpers.SqlConnectorUserTable;
-import model.User;
 import helpers.SqlConnectorPicksPriceTable;
+import model.User;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.WebApplicationContextUtils;
+import services.ServletUtility;
 
 @WebServlet("/LoginServlet")
 public class LoginServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
 
+    @Autowired
     private SqlConnectorUserTable sqlConnectorUserTable;
-    @SuppressWarnings("unused")
-	private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
+
+    @Autowired
+    private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
+
+    @Autowired
+    private ServletUtility servletUtility; // ✅ Autowired Spring Bean
 
     @Override
     public void init() throws ServletException {
-        // Get Spring WebApplicationContext and fetch beans manually
+        super.init();
+        // ✅ Enable Spring DI in this servlet
         WebApplicationContext springContext =
                 WebApplicationContextUtils.getRequiredWebApplicationContext(getServletContext());
-
-        this.sqlConnectorUserTable = springContext.getBean(SqlConnectorUserTable.class);
-        this.sqlConnectorPicksPriceTable = springContext.getBean(SqlConnectorPicksPriceTable.class);
+        springContext.getAutowireCapableBeanFactory().autowireBean(this);
+        System.out.println("LoginServlet initialized with Spring beans.");
     }
 
     @Override
@@ -47,13 +54,17 @@ public class LoginServlet extends HttpServlet {
             return;
         }
 
+        // ✅ Call ServletUtility to set allowSignUp and other attributes
+        servletUtility.setCommonAttributes(request, getServletContext());
+
+        // If signup was successful, show message
         String signupSuccess = request.getParameter("signupSuccess");
         if ("true".equals(signupSuccess)) {
             request.setAttribute("message", "Sign up successful! Please log in.");
         }
 
-           response.sendRedirect(request.getContextPath() + "/HomeServlet");
-
+        // ✅ Forward to login.jsp (instead of redirect to HomeServlet)
+        request.getRequestDispatcher("login.jsp").forward(request, response);
     }
 
     @Override
@@ -81,7 +92,7 @@ public class LoginServlet extends HttpServlet {
                 session.setAttribute("isCommish", roles.getOrDefault("isCommish", false));
 
                 // Redirect to home page
-                response.sendRedirect("home.jsp");
+                response.sendRedirect("HomeServlet");
             } else {
                 // Handle user not found
                 request.setAttribute("errorMessage", "User not found.");
@@ -94,3 +105,5 @@ public class LoginServlet extends HttpServlet {
         }
     }
 }
+
+

@@ -1,5 +1,6 @@
 package services;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import javax.servlet.ServletContext;
@@ -7,38 +8,37 @@ import javax.servlet.http.HttpServletRequest;
 import model.PicksPrice;
 import model.User;
 import helpers.SqlConnectorPicksPriceTable;
+import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
+@Component
 public class ServletUtility {
-    private static SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
-    private static CommonProcessingService commonProcessingService;
-    
-    // Static setter for CommonProcessingService
-    public static void setCommonProcessingService(CommonProcessingService service) {
-        commonProcessingService = service;
-    }
 
-    // Static setter for the SqlConnectorPicksPriceTable instance
-    public static void setSqlConnectorPicksPriceTable(SqlConnectorPicksPriceTable connector) {
-        sqlConnectorPicksPriceTable = connector;
-    }
+    @Autowired
+    private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
 
-    public static void setCommonAttributes(HttpServletRequest request, ServletContext context) {
+    @Autowired
+    private CommonProcessingService commonProcessingService;
+
+    public void setCommonAttributes(HttpServletRequest request, ServletContext context) {
+        System.out.println("ServletUtility.setCommonAttributes started");
+
         // First, get all relevant attributes
         String adminSetSeason = (String) context.getAttribute("adminSetSeason");
         String adminSetWeek = (String) context.getAttribute("adminSetWeek");
         String currentSeason = (String) context.getAttribute("currentSeason");
         String currentWeek = (String) context.getAttribute("currentWeek");
-        
+
         System.out.println("ServletUtility: Retrieved from context - " +
-                          "adminSetSeason: " + adminSetSeason + 
-                          ", adminSetWeek: " + adminSetWeek + 
-                          ", currentSeason: " + currentSeason + 
-                          ", currentWeek: " + currentWeek);
+                "adminSetSeason: " + adminSetSeason +
+                ", adminSetWeek: " + adminSetWeek +
+                ", currentSeason: " + currentSeason +
+                ", currentWeek: " + currentWeek);
 
         // Determine which values to use (admin override takes precedence)
         String finalSeason;
         String finalWeek;
-        
+
         if (adminSetSeason != null && adminSetWeek != null) {
             // Use admin override values
             finalSeason = adminSetSeason;
@@ -50,7 +50,7 @@ public class ServletUtility {
                 // Clear existing values to force recalculation
                 context.removeAttribute("currentSeason");
                 context.removeAttribute("currentWeek");
-                
+
                 commonProcessingService.updateSeasonAndWeek(context);
                 finalSeason = (String) context.getAttribute("season");
                 finalWeek = (String) context.getAttribute("week");
@@ -65,53 +65,77 @@ public class ServletUtility {
         }
 
         System.out.println("ServletUtility: Final determined values - " +
-                          "Season: " + finalSeason + 
-                          ", Week: " + finalWeek);
+                "Season: " + finalSeason +
+                ", Week: " + finalWeek);
 
         // Set values consistently across all attributes
-        // Request attributes
         request.setAttribute("season", finalSeason);
         request.setAttribute("week", finalWeek);
-        
-        // Context attributes - ensure all relevant attributes are updated
+
         context.setAttribute("season", finalSeason);
         context.setAttribute("week", finalWeek);
         context.setAttribute("currentSeason", finalSeason);
         context.setAttribute("currentWeek", finalWeek);
 
-        // Handle PicksPrice and allowSignUp
+        // ✅ Handle PicksPrice and allowSignUp
         handlePicksPriceAttributes(context, finalSeason);
 
-        // Handle user attributes
+        // ✅ Handle user attributes
         handleUserAttributes(request, context);
-    
     }
 
-    private static void handlePicksPriceAttributes(ServletContext context, String season) {
+    /**
+     * Ensures PicksPrice table is initialized for the given season.
+     * If no record exists, creates a default one and enables sign-up.
+     */
+    private void handlePicksPriceAttributes(ServletContext context, String season) {
+        System.out.println("ServletUtility.handlePicksPriceAttributes started");
         try {
             if (sqlConnectorPicksPriceTable != null) {
                 int seasonInt = Integer.parseInt(season);
                 List<PicksPrice> pricesList = sqlConnectorPicksPriceTable.getPickPrices(seasonInt);
-                String kothSeason = (String) context.getAttribute("kothSeason");
-                
-                PicksPrice picksPrice = pricesList.stream()
-                    .filter(p -> p.getKothSeason().equals(kothSeason))
-                    .findFirst()
-                    .orElse(null);
-                    
-                boolean allowSignUp = picksPrice != null && picksPrice.isAllowSignUp();
-                context.setAttribute("allowSignUp", allowSignUp);
+
+                if (pricesList == null || pricesList.isEmpty()) {
+                    // No record found for this season → Create a default record
+                    System.out.println("No PicksPrice record found for season " + seasonInt + ". Creating default entry...");
+
+                    PicksPrice defaultPrice = new PicksPrice();
+                    defaultPrice.setPicksPriceSeason(seasonInt);
+                    defaultPrice.setKothSeason(String.valueOf(seasonInt));
+                    defaultPrice.setMaxPicks(5);
+                    defaultPrice.setPickPrice1(BigDecimal.valueOf(0));
+                    defaultPrice.setPickPrice2(BigDecimal.valueOf(0));
+                    defaultPrice.setPickPrice3(BigDecimal.valueOf(0));
+                    defaultPrice.setPickPrice4(BigDecimal.valueOf(0));
+                    defaultPrice.setPickPrice5(BigDecimal.valueOf(0));
+                    defaultPrice.setAllowSignUp(true); // ✅ Enable sign-up by default
+
+                    boolean success = sqlConnectorPicksPriceTable.updatePickPrices(defaultPrice);
+                    System.out.println("Default PicksPrice created for season " + seasonInt + ": " + success);
+
+                    context.setAttribute("allowSignUp", true);
+                    context.setAttribute("kothSeason", defaultPrice.getKothSeason());
+                } else {
+                    // Use existing record
+                    PicksPrice picksPrice = pricesList.get(0);
+                    boolean allowSignUp = picksPrice.isAllowSignUp();
+                    context.setAttribute("allowSignUp", allowSignUp);
+                    context.setAttribute("kothSeason", picksPrice.getKothSeason());
+                    System.out.println("Found PicksPrice record. allowSignUp = " + allowSignUp);
+                }
             } else {
+                System.out.println("sqlConnectorPicksPriceTable is null. Setting allowSignUp to false.");
                 context.setAttribute("allowSignUp", false);
             }
         } catch (Exception e) {
             System.err.println("ServletUtility: Error handling PicksPrice: " + e.getMessage());
+            e.printStackTrace();
             context.setAttribute("allowSignUp", false);
         }
     }
 
-
-    private static void handleUserAttributes(HttpServletRequest request, ServletContext context) {
+    private void handleUserAttributes(HttpServletRequest request, ServletContext context) {
+        System.out.println("ServletUtility.handleUserAttributes started");
         String userName = (String) request.getSession().getAttribute("userName");
         if (userName != null) {
             request.setAttribute("userName", userName);
@@ -120,18 +144,16 @@ public class ServletUtility {
                 request.setAttribute("user", user);
             }
         }
-
         System.out.println("ServletUtility: Set user attributes - UserName: " + userName);
     }
 
     public static User getUserFromContext(ServletContext context, String username) {
-    	System.out.println("ServletUtility.getUserFromContext method started");
+        System.out.println("ServletUtility.getUserFromContext method started");
         @SuppressWarnings("unchecked")
         Map<String, User> userMap = (Map<String, User>) context.getAttribute("userMap");
         if (userMap != null) {
             User user = userMap.get(username);
             if (user != null) {
-//                System.out.println("ServletUtility: Retrieved user from context - Username: " + username);
                 return user;
             } else {
                 System.out.println("ServletUtility: User not found in context - Username: " + username);
