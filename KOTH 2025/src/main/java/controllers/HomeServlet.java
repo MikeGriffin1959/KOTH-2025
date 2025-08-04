@@ -1,29 +1,25 @@
 package controllers;
 
 import java.io.IOException;
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Month;
-import java.time.temporal.TemporalAdjusters;
 import java.util.*;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import helpers.ApiParsers;
-import helpers.SqlConnectorGameTable;
-import helpers.SqlConnectorPicksTable;
-import helpers.SqlConnectorUserTable;
-import services.NFLGameFetcherService;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+
 import model.Game;
 import model.User;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+
+import helpers.SqlConnectorGameTable;
+import helpers.SqlConnectorPicksTable;
+import helpers.SqlConnectorUserTable;
 import services.CommonProcessingService;
+import services.NFLGameFetcherService;
 import services.ServletUtility;
 
 @Controller
@@ -45,11 +41,10 @@ public class HomeServlet {
     private NFLGameFetcherService nflGameFetcherService;
 
     @Autowired
-    private ServletUtility servletUtility;  // ✅ Inject instead of static calls
+    private ServletUtility servletUtility; // ✅ Injected instead of static
 
     @GetMapping({"/", "/home", "/index", "/HomeServlet"})
     public String doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-
         System.out.println("HomeServlet: doGet() started");
         long startTime = System.nanoTime();
 
@@ -62,36 +57,20 @@ public class HomeServlet {
 
             ServletContext context = request.getServletContext();
 
-            // ✅ Always set common attributes for consistency
-            servletUtility.setCommonAttributes(request, context);
-
-            // ✅ Ensure all critical session data (allUsers, initialPicks, userRemainingPicks) is available
-            commonProcessingService.ensureSessionData(session, context);
-
-            // ✅ Retrieve season/week
-            String seasonStr = (String) request.getAttribute("season");
-            String weekStr = (String) request.getAttribute("week");
-
-            if (seasonStr == null) seasonStr = (String) session.getAttribute("season");
-            if (weekStr == null) weekStr = (String) session.getAttribute("currentWeek");
-
-            if (seasonStr == null) {
-                LocalDateTime now = LocalDateTime.now();
-                int year = now.getYear();
-                if (now.getMonthValue() <= 2) year--;
-                seasonStr = String.valueOf(year);
-            }
-            if (weekStr == null || weekStr.isEmpty()) {
-                weekStr = "1";
-            }
-
-            int seasonInt = Integer.parseInt(seasonStr);
-            int weekInt = Integer.parseInt(weekStr);
+            // ✅ Process all common data, including total pot, players left, picks left
+            commonProcessingService.processCommonData(request, response, context);
 
             // ✅ Fetch current week games & update DB
             List<Game> parsedGames = nflGameFetcherService.fetchCurrentWeekGames();
             sqlConnectorGameTable.updateGameTableMinimal(parsedGames);
 
+            // ✅ Retrieve season and week from request attributes (set in processCommonData)
+            String seasonStr = (String) request.getAttribute("season");
+            String weekStr = (String) request.getAttribute("currentWeek");
+            int seasonInt = Integer.parseInt(seasonStr);
+            int weekInt = Integer.parseInt(weekStr);
+
+            // ✅ Get all weeks picks data
             Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData =
                     sqlConnectorPicksTable.getPicksForAllWeeks(seasonInt, weekInt);
 
@@ -99,7 +78,7 @@ public class HomeServlet {
             Map<String, Integer> teamPickCounts = new HashMap<>();
             Map<String, Boolean> teamResults = new HashMap<>();
             calculateTeamPickCountsAndResults(allWeeksData, weekInt, teamPickCounts, teamResults,
-            	    (Map<String, String>) request.getServletContext().getAttribute("teamNameToAbbrev"));
+                    (Map<String, String>) context.getAttribute("teamNameToAbbrev"));
 
             // ✅ Prepare user full names
             List<String> allUsers = (List<String>) session.getAttribute("allUsers");
@@ -108,7 +87,7 @@ public class HomeServlet {
             boolean userHasPaid = sqlConnectorUserTable.hasUserPaidForSeason(
                     (Integer) session.getAttribute("userId"), seasonInt);
 
-            // ✅ Set attributes for JSP
+            // ✅ Set attributes for JSP (relying on session + calculated maps)
             setRequestAttributes(request, seasonStr, weekStr, allWeeksData,
                     (Map<String, Integer>) session.getAttribute("initialPicks"),
                     (Map<String, Integer>) session.getAttribute("userLosses"),
@@ -118,7 +97,11 @@ public class HomeServlet {
                     (Integer) session.getAttribute("totalPot"),
                     (Integer) session.getAttribute("usersWithRemainingPicks"),
                     (Integer) session.getAttribute("totalRemainingPicks"),
-                    (Integer) session.getAttribute("currentUserRemainingPicks"),
+                    ((Map<String, Integer>) session.getAttribute("userRemainingPicks")) != null
+                        ? ((Map<String, Integer>) session.getAttribute("userRemainingPicks"))
+                            .getOrDefault((String) session.getAttribute("userName"), 0)
+                        : 0,
+
                     userFullNames, userHasPaid,
                     (Map<Integer, Map<String, String>>) context.getAttribute("gameWinners"),
                     teamPickCounts, teamResults);
@@ -136,7 +119,6 @@ public class HomeServlet {
         }
     }
 
-
     @PostMapping("/HomeServlet")
     public String doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         return doGet(request, response);
@@ -145,7 +127,7 @@ public class HomeServlet {
     private Map<String, String> getUserFullNames(List<String> usernames, ServletContext context) {
         Map<String, String> fullNames = new HashMap<>();
         for (String username : usernames) {
-            User user = servletUtility.getUserFromContext(context, username); // ✅ No longer static
+            User user = servletUtility.getUserFromContext(context, username); // ✅ Injected utility
             if (user != null) {
                 fullNames.put(username, user.getFirstName() + " " + user.getLastName());
             } else {
@@ -164,8 +146,7 @@ public class HomeServlet {
                                       Map<String, String> userFullNames, boolean userHasPaid,
                                       Map<Integer, Map<String, String>> gameWinners,
                                       Map<String, Integer> teamPickCounts, Map<String, Boolean> teamResults) {
-        System.out.println("HomeServlet: setRequestAttributes method started");
-        
+
         request.setAttribute("currentSeason", currentSeason);
         request.setAttribute("currentWeek", currentWeek);
         request.setAttribute("optimizedData", optimizedData);
@@ -185,64 +166,43 @@ public class HomeServlet {
         request.setAttribute("teamResults", teamResults);
     }
 
-    private void logReceivedData(HttpServletRequest request) {
-        System.out.println("HomeServlet: logReceivedData method started");        
-        System.out.println("HomeServlet: Logging received data");
-        System.out.println("  optimizedData: " + request.getAttribute("optimizedData"));
-        System.out.println("  initialPicks: " + request.getAttribute("initialPicks"));
-        System.out.println("  userLosses: " + request.getAttribute("userLosses"));
-        System.out.println("  userRemainingPicks: " + request.getAttribute("userRemainingPicks"));
-        System.out.println("  teamNameToAbbrev: " + request.getAttribute("teamNameToAbbrev"));
-        System.out.println("  allUsers: " + request.getAttribute("allUsers"));
-        System.out.println("  totalPot: " + request.getAttribute("totalPot"));
-        System.out.println("  usersWithRemainingPicks: " + request.getAttribute("usersWithRemainingPicks"));
-        System.out.println("  totalRemainingPicks: " + request.getAttribute("totalRemainingPicks"));
-        System.out.println("  currentUserRemainingPicks: " + request.getAttribute("currentUserRemainingPicks"));
-        System.out.println("  userFullNames: " + request.getAttribute("userFullNames"));
-        System.out.println("  userHasPaid: " + request.getAttribute("userHasPaid"));
-        System.out.println("  gameWinners: " + request.getAttribute("gameWinners"));
-        System.out.println("  teamPickCounts: " + request.getAttribute("teamPickCounts"));
-        System.out.println("  teamResults: " + request.getAttribute("teamResults"));
+    private void calculateTeamPickCountsAndResults(Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData,
+                                                   int currentWeekInt, Map<String, Integer> teamPickCounts,
+                                                   Map<String, Boolean> teamResults,
+                                                   Map<String, String> teamNameToAbbrev) {
+
+        if (teamNameToAbbrev == null) {
+            System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
+            return;
+        }
+
+        Map<String, List<Map<String, Object>>> weekData = optimizedData.get(currentWeekInt);
+        if (weekData == null) return;
+
+        for (List<Map<String, Object>> gamePicks : weekData.values()) {
+            if (!gamePicks.isEmpty()) {
+                Map<String, Object> game = gamePicks.get(0);
+
+                // Count picks
+                for (Map<String, Object> pick : gamePicks) {
+                    String selectedTeam = (String) pick.get("selectedTeam");
+                    if (selectedTeam != null) {
+                        teamPickCounts.merge(selectedTeam, 1, Integer::sum);
+                    }
+                }
+
+                // Store results
+                if (game.get("status") != null && game.get("status").toString().contains("FINAL")) {
+                    String homeTeam = (String) game.get("homeTeamName");
+                    String awayTeam = (String) game.get("awayTeamName");
+                    int homeScore = (int) game.get("homeScore");
+                    int awayScore = (int) game.get("awayScore");
+
+                    boolean homeTeamWon = homeScore > awayScore;
+                    teamResults.put(teamNameToAbbrev.get(homeTeam), homeTeamWon);
+                    teamResults.put(teamNameToAbbrev.get(awayTeam), !homeTeamWon);
+                }
+            }
+        }
     }
-    
-	private void calculateTeamPickCountsAndResults(Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData,
-	                                           int currentWeekInt, Map<String, Integer> teamPickCounts,
-	                                           Map<String, Boolean> teamResults,
-	                                           Map<String, String> teamNameToAbbrev) {
-		
-		if (teamNameToAbbrev == null) {
-	        System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
-	        return;
-	    }
-		
-		
-	    Map<String, List<Map<String, Object>>> weekData = optimizedData.get(currentWeekInt);
-	    if (weekData == null) return;
-	
-	    for (List<Map<String, Object>> gamePicks : weekData.values()) {
-	        if (!gamePicks.isEmpty()) {
-	            Map<String, Object> game = gamePicks.get(0);
-	            
-	            // Count picks
-	            for (Map<String, Object> pick : gamePicks) {
-	                String selectedTeam = (String) pick.get("selectedTeam");
-	                if (selectedTeam != null) {
-	                    teamPickCounts.merge(selectedTeam, 1, Integer::sum);
-	                }
-	            }
-	
-	            // Store results
-	            if (game.get("status") != null && game.get("status").toString().contains("FINAL")) {
-	                String homeTeam = (String) game.get("homeTeamName");
-	                String awayTeam = (String) game.get("awayTeamName");
-	                int homeScore = (int) game.get("homeScore");
-	                int awayScore = (int) game.get("awayScore");
-	
-	                boolean homeTeamWon = homeScore > awayScore;
-	                teamResults.put(teamNameToAbbrev.get(homeTeam), homeTeamWon);
-	                teamResults.put(teamNameToAbbrev.get(awayTeam), !homeTeamWon);
-	            }
-	        }
-	    }
-	}
 }
