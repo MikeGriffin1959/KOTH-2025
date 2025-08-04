@@ -11,6 +11,8 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import services.CommonProcessingService;
+
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -21,11 +23,16 @@ import java.util.List;
 
 @Controller
 public class SignUpServlet {
+
     private final SqlConnectorUserTable sqlConnectorUserTable;
     private final SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
 
     @Autowired
-    public SignUpServlet(SqlConnectorUserTable sqlConnectorUserTable, SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable) {
+    private CommonProcessingService commonProcessingService; // ✅ Added for cache refresh
+
+    @Autowired
+    public SignUpServlet(SqlConnectorUserTable sqlConnectorUserTable,
+                          SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable) {
         this.sqlConnectorUserTable = sqlConnectorUserTable;
         this.sqlConnectorPicksPriceTable = sqlConnectorPicksPriceTable;
     }
@@ -134,6 +141,10 @@ public class SignUpServlet {
 
             sqlConnectorUserTable.addUserPicks(userPicks);
 
+            // ✅ Refresh cache so new user data is immediately visible
+            System.out.println("SignUpServlet: Refreshing application and session cache after new user signup...");
+            commonProcessingService.ensureSessionData(request.getSession(), request.getServletContext());
+
             // Redirect to login with success message
             redirectAttributes.addFlashAttribute("signupSuccess", true);
             redirectAttributes.addFlashAttribute("username", username);
@@ -162,3 +173,4 @@ public class SignUpServlet {
         return "signUp";
     }
 }
+
