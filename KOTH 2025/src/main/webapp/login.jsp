@@ -45,10 +45,11 @@
     <div class="content container">
         <h1 class="text-center mt-5">${applicationScope.kothSeason}</h1>
         <c:if test="${not empty errorMessage}">
-            <div class="alert alert-danger" role="alert">
-                ${error}
-            </div>
-        </c:if>
+		    <div class="alert alert-danger" role="alert">
+		        ${errorMessage}
+		    </div>
+		</c:if>
+
 
         <c:if test="${not empty message}">
             <div class="alert alert-success" role="alert">
