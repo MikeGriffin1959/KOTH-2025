@@ -264,21 +264,42 @@ public class CommissionerServlet {
         return false;
     }
 
-    private void handleUserUpdates(HttpServletRequest request, HttpServletResponse response, Model model, int season) 
+    private void handleUserUpdates(HttpServletRequest request, HttpServletResponse response, Model model, int season)
             throws ServletException, IOException, SQLException {
         boolean updateSuccessful = false;
+        boolean deletePerformed = false;
+
         List<User> users = sqlConnectorUserTable.getAllUsersForSeason(season);
 
         for (User user : users) {
-            // Get paid status - this is season specific
+            // ✅ Check delete request
+            String deleteParam = "deleteUser_" + user.getIdUser();
+            boolean deleteRequested = request.getParameter(deleteParam) != null;
+            boolean confirmDelete = "on".equals(request.getParameter("confirmDelete"));
+
+            if (deleteRequested && confirmDelete) {
+                System.out.println("CommissionerServlet: Deleting user " + user.getIdUser());
+                boolean picksDeleted = sqlConnectorPicksTable.deleteAllPicksForUser(user.getIdUser());
+                boolean userDeleted = sqlConnectorUserTable.deleteUser(user.getIdUser());
+                if (picksDeleted && userDeleted) {
+                    System.out.println("CommissionerServlet: User " + user.getIdUser() + " successfully deleted");
+                    deletePerformed = true;
+                    updateSuccessful = true;
+                } else {
+                    System.err.println("CommissionerServlet: Failed to fully delete user " + user.getIdUser());
+                    model.addAttribute("message", "Failed to delete user " + user.getIdUser());
+                    model.addAttribute("messageType", "error");
+                }
+                continue; // ✅ Skip updates for deleted user
+            }
+
+            // ✅ Otherwise, process normal updates
             String paidParam = "userPicksPaid_" + user.getIdUser();
             boolean newPaidStatus = request.getParameter(paidParam) != null;
 
-            // Get commish status - this is global, not season specific
             String commishParam = "userCommish_" + user.getIdUser();
             boolean newCommishStatus = request.getParameter(commishParam) != null;
 
-            // Get initial picks
             String initialPicksParam = "initialPicks_" + user.getIdUser();
             String initialPicksValue = request.getParameter(initialPicksParam);
             int newInitialPicks = 0;
@@ -291,12 +312,12 @@ public class CommissionerServlet {
             System.out.println("CommissionerServlet.doPost: New commish status: " + newCommishStatus);
             System.out.println("CommissionerServlet.doPost: New initial picks: " + newInitialPicks);
 
-            // Update commish status (global update)
+            // Update commish status
             if (user.isCommish() != newCommishStatus) {
                 sqlConnectorUserTable.updateUserRoles(user.getIdUser(), newCommishStatus);
             }
 
-            // Update season-specific data (paid status and initial picks)
+            // Update picks record
             User existingUserPicks = sqlConnectorUserTable.getInitialPickCount(user.getIdUser(), season);
             if (existingUserPicks != null) {
                 existingUserPicks.setInitialPicks(newInitialPicks);
@@ -312,18 +333,22 @@ public class CommissionerServlet {
                 sqlConnectorUserTable.addUserPicks(userPicks);
                 System.out.println("CommissionerServlet.doPost: Successfully created new record for user " + user.getIdUser());
             }
-
             updateSuccessful = true;
         }
 
-        if (updateSuccessful) {
+        // ✅ Feedback message
+        if (deletePerformed) {
+            model.addAttribute("message", "User(s) successfully deleted");
+            model.addAttribute("messageType", "success");
+        } else if (updateSuccessful) {
             model.addAttribute("message", "Update Successful");
-            model.addAttribute("success", true);
+            model.addAttribute("messageType", "success");
         } else {
             model.addAttribute("message", "No changes were made");
-            model.addAttribute("success", true);
+            model.addAttribute("messageType", "warning");
         }
     }
+
 
     private void handleUpdateUserRoles(HttpServletRequest request, Model model) throws SQLException {
         int userId = Integer.parseInt(request.getParameter("selectedUserId"));
