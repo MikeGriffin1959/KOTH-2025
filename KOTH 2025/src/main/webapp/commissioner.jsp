@@ -392,7 +392,7 @@
                                             </td>
                                             <td>
                                                 <select name="initialPicks_${user.idUser}">
-                                                    <c:forEach var="i" begin="0" end="3">
+                                                    <c:forEach var="i" begin="0" end="5">
                                                         <option value="${i}" ${user.initialPicks == i ? "selected" : ""}>${i}</option>
                                                     </c:forEach>
                                                 </select>
