@@ -1,8 +1,8 @@
 package services;
 
 
-import javax.mail.MessagingException;  // For Java EE
-import javax.mail.internet.MimeMessage;
+import jakarta.mail.MessagingException;  // For Java EE
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;

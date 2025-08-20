@@ -1,6 +1,6 @@
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
-<%@ page import="javax.servlet.*" %>
-<%@ page import="javax.servlet.http.*" %>
+<%@ page import="jakarta.servlet.*" %>
+<%@ page import="jakarta.servlet.http.*" %>
 <%@ page import="java.util.List, java.util.Map, java.util.stream.Collectors" %>
 <%@ page import="model.Game" %>
 <%@ page import="java.util.Comparator" %>

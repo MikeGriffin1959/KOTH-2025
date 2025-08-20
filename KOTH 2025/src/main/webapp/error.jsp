@@ -1,5 +1,4 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" isErrorPage="true" %>
-<%@ taglib prefix="c" uri="http://jakarta.apache.org/tags/standard/c" %>
 
 <jsp:include page="header.jsp">
     <jsp:param name="pageTitle" value="Error" />

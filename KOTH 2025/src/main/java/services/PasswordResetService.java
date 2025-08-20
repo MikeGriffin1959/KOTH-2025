@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 import helpers.SqlConnectorUserTable;
 import model.User;
 
-import javax.mail.MessagingException;
+import jakarta.mail.MessagingException;
 import java.sql.SQLException;
 import java.util.UUID;
 
