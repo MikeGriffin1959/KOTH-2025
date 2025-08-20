@@ -201,7 +201,7 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 	/* Pick circles styles */
 	.pick-circles {
 	    display: flex;
-	    justify-content: center;
+	    justify-content: flex-start;
 	    margin-bottom: 5px;
 	}
 	
