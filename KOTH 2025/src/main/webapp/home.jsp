@@ -190,12 +190,14 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
     	display: block; 
 	}
 	
+	/* was flex; switch to a 5-row grid */
 	td.week-column .logo-container {
-		display: flex;
-	    flex-direction: column;
+	    display: grid;
+	    grid-template-rows: repeat(5, 1fr); /* 5 equal rows */
 	    align-items: center;
-	    justify-content: center;
-	    transform: none; 
+	    justify-items: center;
+	    row-gap: 2px; /* optional: same visual spacing as before */
+	    transform: none;
 	}
 	
 	/* Pick circles styles */
@@ -504,11 +506,15 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
     }
 
     /* Container padding adjustment (keeping from previous update) */
-/* Adjust the column containing the teams card */
+	/* Adjust the column containing the teams card */
     .col-md-4 {
         margin-left: -5px;  /* Move the entire column left */
     }
     
+	/* invisible placeholder that still takes space */
+	.logo-spacer {
+	    visibility: hidden;      /* keeps the space, hides content */
+	    border: none !important; /* no border outline */
 	}
 }
 	</style>
@@ -682,8 +688,9 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 						                           }
 						                       });
 
-						                       // Display up to 3 picks for this week
-						                       for (int i = 0; i < Math.min(userPicks.size(), 3); i++) {
+						                    // Display up to 5 picks for this week
+						                       int showCount = Math.min(userPicks.size(), 5);
+						                       for (int i = 0; i < showCount; i++) {
 						                           Map<String, Object> pick = userPicks.get(i);
 						                           String teamAbbr = teamNameToAbbrev.get(pick.get("selectedTeam"));
 						                           String pickResult = (String) pick.get("result");
@@ -692,8 +699,15 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 						                                style="background-image: url('images/team-Logos/<%= teamAbbr.toLowerCase() %>-logo.svg')"
 						                                title="<%= pick.get("selectedTeam") %>">
 						                           </div>
-						                       <%						                       
+						                       <%
 						                       }
+						                       // Fill remaining slots with spacers so we always have 5 rows
+						                       for (int i = showCount; i < 5; i++) {
+						                       %>
+						                           <div class="team-logo logo-spacer"></div>
+						                       <%
+						                       }
+
 						                   } else {
 						                   %>
 						                       <span>-</span>
