@@ -394,6 +394,11 @@ public class CommissionerServlet {
             model.addAttribute("message", "No changes were made");
             model.addAttribute("messageType", "warning");
         }
+        
+     // 🔁 Immediately refresh app-scope caches so other pages see updates right away
+        commonProcessingService.updateUserData(servletContext);
+        commonProcessingService.updatePicksData(servletContext);
+
 
         // ✅ NEW: bump cache version so Home/MakePicks sessions know to refresh
         long now = System.currentTimeMillis();
