@@ -92,7 +92,12 @@ public class LoginServlet extends HttpServlet {
                 session.setAttribute("isCommish", roles.getOrDefault("isCommish", false));
 
                 // Redirect to home page
+                String returnTo = request.getParameter("returnTo");
+                if (returnTo != null && !returnTo.isBlank()) {
+                    response.sendRedirect(returnTo);
+                } else {
                 response.sendRedirect("HomeServlet");
+                }
             } else {
                 // Handle user not found
                 request.setAttribute("errorMessage", "User not found.");

@@ -61,15 +61,56 @@ public class CommissionerServlet {
         System.out.println("CommissionerServlet initialized. sqlConnectorUserTable is " + 
                           (sqlConnectorUserTable != null ? "not null" : "null"));
     }
+    
+    private boolean isLoggedIn(HttpServletRequest request) {
+        HttpSession s = request.getSession(false);
+        return s != null && s.getAttribute("userName") != null;
+    }
+
+    private boolean isAjax(HttpServletRequest request) {
+        return "XMLHttpRequest".equalsIgnoreCase(request.getHeader("X-Requested-With"))
+            || (request.getHeader("Accept") != null && request.getHeader("Accept").contains("application/json"));
+    }
+
+    /** Returns null if auth OK; otherwise returns a redirect string to LoginServlet with returnTo. */
+    private String requireLoginOrRedirect(HttpServletRequest request) {
+        if (isLoggedIn(request)) return null;
+        String original = request.getRequestURI() +
+            (request.getQueryString() != null ? "?" + request.getQueryString() : "");
+        String returnTo = java.net.URLEncoder.encode(original, java.nio.charset.StandardCharsets.UTF_8);
+        return "redirect:/LoginServlet?expired=1&returnTo=" + returnTo;
+    }
+
+    /** For XHR endpoints: if not logged in or not commish -> write 401 JSON and return true (handled). */
+    private boolean failAjaxUnauthorizedIfNeeded(HttpServletRequest request, HttpServletResponse response, boolean mustBeCommish) throws IOException {
+        if (!isAjax(request)) return false;
+        HttpSession s = request.getSession(false);
+        boolean loggedIn = s != null && s.getAttribute("userName") != null;
+        boolean commish = loggedIn && Boolean.TRUE.equals(s.getAttribute("isCommish"));
+        if (!loggedIn || (mustBeCommish && !commish)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setHeader("X-Login-Redirect",
+                request.getContextPath() + "/LoginServlet?expired=1&returnTo=" +
+                java.net.URLEncoder.encode(request.getRequestURI() +
+                  (request.getQueryString() != null ? "?" + request.getQueryString() : ""), 
+                  java.nio.charset.StandardCharsets.UTF_8));
+            response.setContentType("application/json");
+            response.getWriter().write("{\"success\":false,\"message\":\"Unauthorized or session expired\"}");
+            return true;
+        }
+        return false;
+    }
+
 
     @GetMapping("/CommissionerServlet")
-    public String doGet(HttpServletRequest request, HttpServletResponse response, Model model) throws ServletException, IOException {
+    public String doGet(HttpServletRequest request, HttpServletResponse response, Model model)
+            throws ServletException, IOException {
 
-        HttpSession session = request.getSession(false);
-        if (session == null || session.getAttribute("userName") == null) {
-            return "redirect:/LoginServlet";
-        }
+        // First: require login
+        String maybeRedirect = requireLoginOrRedirect(request);
+        if (maybeRedirect != null) return maybeRedirect;
 
+        // Then: require role
         if (!isCommish(request)) {
             return "redirect:/accessDenied.jsp";
         }
@@ -175,9 +216,19 @@ public class CommissionerServlet {
     }
 
     @PostMapping("/CommissionerServlet")
-    public String doPost(HttpServletRequest request, HttpServletResponse response, Model model) throws ServletException, IOException {
+    public String doPost(HttpServletRequest request, HttpServletResponse response, Model model)
+            throws ServletException, IOException {
         System.out.println("CommissionerServlet: doPost method called");
         long startTime = System.nanoTime();
+
+        // If this is an Ajax/JSON call and not authorized, reply 401 JSON
+        if (failAjaxUnauthorizedIfNeeded(request, response, true)) {
+            return null;
+        }
+
+        // Non-Ajax: redirect to login if needed
+        String maybeRedirect = requireLoginOrRedirect(request);
+        if (maybeRedirect != null) return maybeRedirect;
 
         if (!isCommish(request)) {
             return "redirect:/accessDenied.jsp";
@@ -256,12 +307,8 @@ public class CommissionerServlet {
     }
 
     private boolean isCommish(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session != null) {
-            Boolean isCommish = (Boolean) session.getAttribute("isCommish");
-            return isCommish != null && isCommish;
-        }
-        return false;
+        HttpSession s = request.getSession(false);
+        return s != null && Boolean.TRUE.equals(s.getAttribute("isCommish"));
     }
 
     private void handleUserUpdates(HttpServletRequest request, HttpServletResponse response, Model model, int season)
@@ -403,8 +450,10 @@ public class CommissionerServlet {
         System.out.println("CommissionerServlet: Game data successfully stored in the ESPNGame database for season " + season + ".");
     }
     
-    private void handleAllowNewUsers(HttpServletRequest request, HttpServletResponse response) 
+    private void handleAllowNewUsers(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+
+        if (failAjaxUnauthorizedIfNeeded(request, response, true)) return;
         try {
             String seasonStr = (String) request.getAttribute("season");
             if (seasonStr == null) {
@@ -443,6 +492,8 @@ public class CommissionerServlet {
     
     private void handleSetSeasonWeek(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
+
+        if (failAjaxUnauthorizedIfNeeded(request, response, true)) return;
         try {
             String season = request.getParameter("season");
             String week = request.getParameter("week");
@@ -562,9 +613,10 @@ public class CommissionerServlet {
         }
     }
     
-    private void handleUpdatePricePerPick(HttpServletRequest request, HttpServletResponse response) 
+    private void handleUpdatePricePerPick(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        System.out.println("CommissionerServlet - HandleUpdatePricePerPick started");
+
+        if (failAjaxUnauthorizedIfNeeded(request, response, true)) return;
         
         try {
             // Get season value from request
@@ -649,6 +701,8 @@ public class CommissionerServlet {
 
     private void handleCreateSchedule(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
+        if (failAjaxUnauthorizedIfNeeded(request, response, true)) return;
+
         PrintWriter out = response.getWriter();
         ObjectMapper mapper = new ObjectMapper();
         

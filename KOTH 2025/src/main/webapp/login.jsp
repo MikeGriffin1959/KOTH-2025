@@ -1,5 +1,12 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+
+<c:if test="${param.expired == '1'}">
+  <div class="alert alert-warning" role="alert">
+    Your session expired. Please sign in again.
+  </div>
+</c:if>
 
 
 <!DOCTYPE html>
@@ -59,6 +66,7 @@
         </c:if>
         
         <form action="LoginServlet" method="post" class="mt-4" id="loginForm">
+        	 <input type="hidden" name="returnTo" value="${fn:escapeXml(param.returnTo)}" />
             <div class="form-group form-check">
                 <input type="checkbox" class="form-check-input" id="rememberMe" name="rememberMe">
                 <label class="form-check-label" for="rememberMe">Remember Me</label>

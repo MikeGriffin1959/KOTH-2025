@@ -50,9 +50,11 @@ public class HomeServlet {
 
         try {
             HttpSession session = request.getSession(false);
-            if (session == null) {
-                System.out.println("HomeServlet: No session found, redirecting to LoginServlet");
-                return "redirect:/LoginServlet";
+            if (session == null || session.getAttribute("userName") == null) {
+                System.out.println("HomeServlet: Not logged in, redirecting to LoginServlet");
+                String original = request.getRequestURI() + (request.getQueryString() != null ? "?" + request.getQueryString() : "");
+                String returnTo = java.net.URLEncoder.encode(original, java.nio.charset.StandardCharsets.UTF_8);
+                return "redirect:/LoginServlet?expired=1&returnTo=" + returnTo;
             }
 
             ServletContext context = request.getServletContext();
@@ -82,6 +84,7 @@ public class HomeServlet {
 
             // ✅ Prepare user full names
             List<String> allUsers = (List<String>) session.getAttribute("allUsers");
+            if (allUsers == null) allUsers = java.util.Collections.emptyList();
             Map<String, String> userFullNames = getUserFullNames(allUsers, context);
 
             boolean userHasPaid = sqlConnectorUserTable.hasUserPaidForSeason(
