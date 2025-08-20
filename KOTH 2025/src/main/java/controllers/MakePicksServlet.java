@@ -89,25 +89,40 @@ public class MakePicksServlet {
         System.out.println("MakePicksServlet: doGet method started");
         long startTime = System.nanoTime();
 
-        // Require login first (covers timed-out or half-dead sessions)
-        String maybeRedirect = requireLoginOrRedirect(request);
-        if (maybeRedirect != null) return maybeRedirect;
+        // Treat missing/half-dead sessions as not logged in; preserve returnTo
+        HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute("userName") == null || session.getAttribute("userId") == null) {
+            String original = request.getRequestURI() +
+                    (request.getQueryString() != null ? "?" + request.getQueryString() : "");
+            String returnTo = java.net.URLEncoder.encode(original, java.nio.charset.StandardCharsets.UTF_8);
+            return "redirect:/LoginServlet?expired=1&returnTo=" + returnTo;
+        }
 
-        HttpSession session = request.getSession(false); // now guaranteed non-null & has userName/userId by helper
+        // If commissioner updated anything, force a refresh of derived session data
+        ServletContext context = request.getServletContext();
+        Long appVer  = (Long) context.getAttribute("derivedDataVersion");
+        Long seenVer = (Long) session.getAttribute("derivedDataVersionSeen");
+        if (appVer != null && (seenVer == null || !appVer.equals(seenVer))) {
+            System.out.println("MakePicksServlet: cache version changed → refreshing session data");
+            commonProcessingService.ensureSessionData(session, context);
+            session.setAttribute("derivedDataVersionSeen", appVer);
+        }
 
-        servletUtility.setCommonAttributes(request, request.getServletContext());
+        // Populate common attributes (season/week, etc.)
+        servletUtility.setCommonAttributes(request, context);
 
         String season = (String) request.getAttribute("season");
         String week   = (String) request.getAttribute("week");
-        if (season == null) season = (String) request.getServletContext().getAttribute("currentSeason");
-        if (week   == null) week   = (String) request.getServletContext().getAttribute("currentWeek");
+        if (season == null) season = (String) context.getAttribute("currentSeason");
+        if (week   == null) week   = (String) context.getAttribute("currentWeek");
 
         if (season == null || week == null) {
             model.addAttribute("errorMessage", "Season/week not resolved.");
             return "error";
         }
 
-        int seasonInt, weekInt;
+        final int seasonInt;
+        final int weekInt;
         try {
             seasonInt = Integer.parseInt(season);
             weekInt   = Integer.parseInt(week);
@@ -116,26 +131,29 @@ public class MakePicksServlet {
             return "error";
         }
 
-        String userName = (String) session.getAttribute("userName");
-        Integer userId  = (Integer) session.getAttribute("userId");
+        String  userName = (String) session.getAttribute("userName");
+        Integer userId   = (Integer) session.getAttribute("userId");
         if (userId == null || userName == null) {
-            // Treat as not logged in (preserve returnTo)
-            return requireLoginOrRedirect(request);
+            String original = request.getRequestURI() +
+                    (request.getQueryString() != null ? "?" + request.getQueryString() : "");
+            String returnTo = java.net.URLEncoder.encode(original, java.nio.charset.StandardCharsets.UTF_8);
+            return "redirect:/LoginServlet?expired=1&returnTo=" + returnTo;
         }
 
         @SuppressWarnings("unchecked")
         Map<String, Integer> userRemainingPicksPriorWeek =
-            (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
+                (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
 
-        // If missing, try to refresh once from service/context
+        // If missing, try to refresh once from the service/context
         if (userRemainingPicksPriorWeek == null || userRemainingPicksPriorWeek.isEmpty()) {
             System.out.println("MakePicksServlet: Prior week picks missing, recalculating...");
-            commonProcessingService.ensureSessionData(session, request.getServletContext());
+            commonProcessingService.ensureSessionData(session, context);
             @SuppressWarnings("unchecked")
             Map<String, Integer> refreshedPriorWeek =
-                (Map<String, Integer>) request.getServletContext().getAttribute("userRemainingPicksPriorWeek");
-            userRemainingPicksPriorWeek = (refreshedPriorWeek != null) ? refreshedPriorWeek : Collections.emptyMap();
+                    (Map<String, Integer>) context.getAttribute("userRemainingPicksPriorWeek");
+            userRemainingPicksPriorWeek = (refreshedPriorWeek != null) ? refreshedPriorWeek : java.util.Collections.emptyMap();
             session.setAttribute("userRemainingPicksPriorWeek", userRemainingPicksPriorWeek);
+
             if (userRemainingPicksPriorWeek.isEmpty()) {
                 model.addAttribute("errorMessage", "Unable to load required user data. Please refresh or go to Home first.");
                 return "error";
@@ -143,28 +161,32 @@ public class MakePicksServlet {
         }
 
         int remainingPicks = userRemainingPicksPriorWeek.getOrDefault(userName, 0);
+        System.out.println("MakePicksServlet: Remaining picks for user " + userName + ": " + remainingPicks);
 
         try {
-            // Keep your existing flow; just null-proof where helpful
-            List<Game> espnGames = nflGameFetcherService.fetchCurrentWeekGames();
+            // Update current week games (minimal fields) before showing
+            java.util.List<Game> espnGames = nflGameFetcherService.fetchCurrentWeekGames();
             if (espnGames != null && !espnGames.isEmpty()) {
                 sqlConnectorGameTable.updateGameTableMinimal(espnGames);
             }
 
-            Map<String, List<String>> selectedPicks = sqlConnectorPicksTable.getUserPicks(userId, seasonInt, weekInt);
-            if (selectedPicks == null) selectedPicks = Collections.emptyMap();
+            Map<String, java.util.List<String>> selectedPicks =
+                    sqlConnectorPicksTable.getUserPicks(userId, seasonInt, weekInt);
+            if (selectedPicks == null) selectedPicks = java.util.Collections.emptyMap();
 
             Map<String, String> teamNameToAbbrev = sqlConnectorTeamsTable.getTeamNameToAbbrev();
-            if (teamNameToAbbrev == null) teamNameToAbbrev = Collections.emptyMap();
+            if (teamNameToAbbrev == null) teamNameToAbbrev = java.util.Collections.emptyMap();
 
-            List<Game> games = sqlConnectorGameTable.getGamesForWeek(seasonInt, weekInt);
-            if (games == null) games = new ArrayList<>();
+            java.util.List<Game> games = sqlConnectorGameTable.getGamesForWeek(seasonInt, weekInt);
+            if (games == null) games = new java.util.ArrayList<>();
 
+            // Update odds for scheduled games and normalize statuses/dates
             updateOddsForScheduledGames(games);
             games = sqlConnectorGameTable.getGamesForWeek(seasonInt, weekInt);
-            if (games == null) games = new ArrayList<>();
+            if (games == null) games = new java.util.ArrayList<>();
             processGameStatus(games);
 
+            // Model for JSP
             model.addAttribute("remainingPicks", remainingPicks);
             model.addAttribute("selectedPicks", selectedPicks);
             model.addAttribute("teamNameToAbbrev", teamNameToAbbrev);
@@ -185,6 +207,7 @@ public class MakePicksServlet {
             return "error";
         }
     }
+
 
     @PostMapping("/MakePicksServlet")
     public String doPost(HttpServletRequest request, HttpServletResponse response, Model model)

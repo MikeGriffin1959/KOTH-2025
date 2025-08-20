@@ -394,7 +394,18 @@ public class CommissionerServlet {
             model.addAttribute("message", "No changes were made");
             model.addAttribute("messageType", "warning");
         }
+
+        // ✅ NEW: bump cache version so Home/MakePicks sessions know to refresh
+        long now = System.currentTimeMillis();
+        servletContext.setAttribute("derivedDataVersion", now);
+
+        // (Optional) clear any app-scope derived objects you populate elsewhere
+        servletContext.removeAttribute("userRemainingPicksPriorWeek");
+        servletContext.removeAttribute("teamNameToAbbrev");
+        servletContext.removeAttribute("gameWinners");
+        // add/remove more keys here if you cache others in application scope
     }
+
 
 
     private void handleUpdateUserRoles(HttpServletRequest request, Model model) throws SQLException {

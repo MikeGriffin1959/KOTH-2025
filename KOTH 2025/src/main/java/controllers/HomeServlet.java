@@ -58,6 +58,13 @@ public class HomeServlet {
             }
 
             ServletContext context = request.getServletContext();
+            Long appVer  = (Long) context.getAttribute("derivedDataVersion");
+            Long seenVer = (Long) session.getAttribute("derivedDataVersionSeen");
+            if (appVer != null && (seenVer == null || !appVer.equals(seenVer))) {
+                commonProcessingService.ensureSessionData(session, context);
+                session.setAttribute("derivedDataVersionSeen", appVer);
+            }
+
 
             // ✅ Process all common data, including total pot, players left, picks left
             commonProcessingService.processCommonData(request, response, context);
