@@ -1,0 +1,4 @@
+<Context sessionCookiePath="/">
+  <!-- Optional: modern cookie processor; leave SameSite default (Lax) on HTTP -->
+  <CookieProcessor className="org.apache.tomcat.util.http.Rfc6265CookieProcessor"/>
+</Context>

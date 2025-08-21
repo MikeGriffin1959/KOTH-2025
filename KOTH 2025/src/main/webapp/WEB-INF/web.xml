@@ -23,7 +23,7 @@
 	  <session-timeout>60</session-timeout> <!-- minutes -->
 	  <cookie-config>
 	    <http-only>true</http-only>
-	    <secure>true</secure> <!-- if HTTPS-only -->
+	    <secure>false</secure> <!-- if HTTP-only -->
 	  </cookie-config>
 	</session-config>
 	
