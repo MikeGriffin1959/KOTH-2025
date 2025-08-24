@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.WebApplicationContextUtils;
 import services.ServletUtility;
+import services.CookieConfigurationService; // New import
 
 @WebServlet("/LoginServlet")
 public class LoginServlet extends HttpServlet {
@@ -30,12 +31,15 @@ public class LoginServlet extends HttpServlet {
     private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
 
     @Autowired
-    private ServletUtility servletUtility; // ✅ Autowired Spring Bean
+    private ServletUtility servletUtility;
+
+    @Autowired
+    private CookieConfigurationService cookieConfigurationService; // New service
 
     @Override
     public void init() throws ServletException {
         super.init();
-        // ✅ Enable Spring DI in this servlet
+        // Enable Spring DI in this servlet
         WebApplicationContext springContext =
                 WebApplicationContextUtils.getRequiredWebApplicationContext(getServletContext());
         springContext.getAutowireCapableBeanFactory().autowireBean(this);
@@ -54,7 +58,7 @@ public class LoginServlet extends HttpServlet {
             return;
         }
 
-        // ✅ Call ServletUtility to set allowSignUp and other attributes
+        // Call ServletUtility to set allowSignUp and other attributes
         servletUtility.setCommonAttributes(request, getServletContext());
 
         // If signup was successful, show message
@@ -63,19 +67,25 @@ public class LoginServlet extends HttpServlet {
             request.setAttribute("message", "Sign up successful! Please log in.");
         }
 
-        // ✅ Forward to login.jsp (instead of redirect to HomeServlet)
+        // Forward to login.jsp
         request.getRequestDispatcher("login.jsp").forward(request, response);
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        System.out.println("LoginServlet.doPost() called");
+        System.out.println("=== LoginServlet.doPost() called ===");
 
         String username = request.getParameter("userName");
         String password = request.getParameter("password");
+        
+        System.out.println("Attempting login for username: " + username);
+        System.out.println("Password provided: " + (password != null && !password.isEmpty()));
+        
+        try {
+            LoginResult result = sqlConnectorUserTable.isValidUser(username, password);
+            System.out.println("Login result: " + result);
 
-        LoginResult result = sqlConnectorUserTable.isValidUser(username, password);
 
         if (result == LoginResult.SUCCESS) {
             User user = sqlConnectorUserTable.getUserByUsername(username);
@@ -84,8 +94,17 @@ public class LoginServlet extends HttpServlet {
                 // Fetch roles
                 Map<String, Boolean> roles = sqlConnectorUserTable.getUserRoles(username);
 
-                // Set session attributes
+             // Create session - Tomcat handles cookie configuration automatically
                 HttpSession session = request.getSession(true);
+
+                // Add debug logging
+                System.out.println("AWS_REGION: " + System.getenv("AWS_REGION"));
+                System.out.println("EB_ENVIRONMENT_NAME: " + System.getenv("EB_ENVIRONMENT_NAME"));
+                
+                // Configure session cookie for current environment
+                cookieConfigurationService.configureSessionCookie(request, response);
+                
+                // Set session attributes
                 session.setAttribute("userName", user.getUsername());
                 session.setAttribute("userId", user.getIdUser());
                 session.setAttribute("isAdmin", roles.getOrDefault("isAdmin", false));
@@ -96,19 +115,25 @@ public class LoginServlet extends HttpServlet {
                 if (returnTo != null && !returnTo.isBlank()) {
                     response.sendRedirect(returnTo);
                 } else {
-                response.sendRedirect("HomeServlet");
+                    response.sendRedirect("HomeServlet");
                 }
             } else {
                 // Handle user not found
                 request.setAttribute("errorMessage", "User not found.");
                 request.getRequestDispatcher("login.jsp").forward(request, response);
+                
             }
         } else {
             // Handle invalid login
             request.setAttribute("errorMessage", "Invalid username or password.");
             request.getRequestDispatcher("login.jsp").forward(request, response);
         }
+        } catch (Exception e) {
+            System.out.println("Exception during login: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
+    
 }
 
 
