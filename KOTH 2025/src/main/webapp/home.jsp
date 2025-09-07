@@ -516,7 +516,13 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 	    visibility: hidden;      /* keeps the space, hides content */
 	    border: none !important; /* no border outline */
 	}
-}
+	.team-item.winner .team-logo {
+	    border-color: green !important;
+	}
+	
+	.team-item.loser .team-logo {
+	    border-color: red !important;
+	}
 	</style>
     <script>
         function goToMakePicks(username) {
@@ -566,8 +572,8 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                                }
                                
                                String resultClass = "";
-                               if (teamResults != null && teamResults.containsKey(teamName)) {
-                                   resultClass = teamResults.get(teamName) ? "winner" : "loser";
+                               if (teamResults != null && teamResults.containsKey(teamAbbr)) {
+                                   resultClass = teamResults.get(teamAbbr) ? "winner" : "loser";
                                }
                        %>
                                <div class="team-item <%= resultClass %>">
