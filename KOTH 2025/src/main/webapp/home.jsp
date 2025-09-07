@@ -527,10 +527,12 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 
 <body>
   <div class="container">
+       <!-- Header Section -->
        <jsp:include page="header.jsp">
            <jsp:param name="pageTitle" value="Home" />
        </jsp:include>
        
+       <!-- Info Box Section -->
        <div class="info-box-wrapper">
            <div class="info-box">
                <p><strong>Total Pot:</strong> $${sessionScope.totalPot}</p>
@@ -595,6 +597,7 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
            <h1 class="deadbeat-message">Pay your KOTH fee, you deadbeat!</h1>
        <% } %>
        
+       <!-- Player's Picks Section -->
        <div class="table-container">
            <div class="table-responsive">
                <table class="table table-bordered table-custom">
@@ -641,81 +644,84 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 						               boolean weekDataExists = optimizedData != null && optimizedData.containsKey(weekNumber);
 						           %>
 						               <td class="week-column">
-						                   <div class="logo-container">
-						                   <% 
-						                   if (weekDataExists) {
-						                       List<Map<String, Object>> userPicks = new ArrayList<>();
-						                       Map<String, List<Map<String, Object>>> weekData = optimizedData.get(weekNumber);
-						                       
-						                    // Collect all picks for this user in this week
-						                       for (List<Map<String, Object>> gamePicks : weekData.values()) {
-						                           for (Map<String, Object> pick : gamePicks) {
-						                               if (user.equals(pick.get("username")) && pick.get("selectedTeam") != null) {
-						                                   String status = (String) pick.get("status");
-						                                   String pickResult = "pick-pending";
-						                                   
-						                                   if ("STATUS_FINAL".equals(status)) {
-						                                       int homeScore = (int) pick.get("homeScore");
-						                                       int awayScore = (int) pick.get("awayScore");
-						                                       String selectedTeam = (String) pick.get("selectedTeam");
-						                                       String homeTeamName = (String) pick.get("homeTeamName");
-
-						                                       String selectedTeamAbbr = teamNameToAbbrev.get(selectedTeam);
-						                                       String homeTeamAbbr = teamNameToAbbrev.get(homeTeamName);
-						                                       boolean isHomeTeam = selectedTeamAbbr.equals(homeTeamAbbr);
-						                                       boolean isWin = (homeScore > awayScore && isHomeTeam) || 
-						                                                      (awayScore > homeScore && !isHomeTeam);
-						                                       pickResult = isWin ? "pick-win" : "pick-loss";
-						                                   }
-						                                   pick.put("result", pickResult);
-						                                   userPicks.add(pick);
-						                               }
-						                           }
-						                       }
-
-						                       // Modified sort to put losses first, then pending, then wins
-						                       Collections.sort(userPicks, new Comparator<Map<String, Object>>() {
-						                           @Override
-						                           public int compare(Map<String, Object> p1, Map<String, Object> p2) {
-						                               String result1 = (String) p1.get("result");
-						                               String result2 = (String) p2.get("result");
-						                               
-						                               // Loss = 2, pending = 1, win = 0
-						                               int sort1 = "pick-loss".equals(result1) ? 2 : ("pick-pending".equals(result1) ? 1 : 0);
-						                               int sort2 = "pick-loss".equals(result2) ? 2 : ("pick-pending".equals(result2) ? 1 : 0);
-						                               
-						                               return sort2 - sort1;
-						                           }
-						                       });
-
-						                    // Display up to 5 picks for this week
-						                       int showCount = Math.min(userPicks.size(), 5);
-						                       for (int i = 0; i < showCount; i++) {
-						                           Map<String, Object> pick = userPicks.get(i);
-						                           String teamAbbr = teamNameToAbbrev.get(pick.get("selectedTeam"));
-						                           String pickResult = (String) pick.get("result");
-						                       %>
-						                           <div class="team-logo <%= pickResult %>" 
-						                                style="background-image: url('images/team-Logos/<%= teamAbbr.toLowerCase() %>-logo.svg')"
-						                                title="<%= pick.get("selectedTeam") %>">
-						                           </div>
-						                       <%
-						                       }
-						                       // Fill remaining slots with spacers so we always have 5 rows
-						                       for (int i = showCount; i < 5; i++) {
-						                       %>
-						                           <div class="team-logo logo-spacer"></div>
-						                       <%
-						                       }
-
-						                   } else {
-						                   %>
-						                       <span>-</span>
-						                   <%
-						                   }
-						                   %>
-						                   </div>
-						               </td>
+    										<div class="logo-container">
+										    <% 
+										    if (weekDataExists) {
+										        List<Map<String, Object>> userPicks = new ArrayList<>();
+										        Map<String, List<Map<String, Object>>> weekData = optimizedData.get(weekNumber);
+										        
+										        // Collect all picks for this user in this week
+										        for (List<Map<String, Object>> gamePicks : weekData.values()) {
+										            for (Map<String, Object> pick : gamePicks) {
+										                if (user.equals(pick.get("username")) && pick.get("selectedTeam") != null) {
+										                    String status = (String) pick.get("status");
+										                    String pickResult = "pick-pending";
+										                    
+										                    if ("STATUS_FINAL".equals(status)) {
+										                        int homeScore = (int) pick.get("homeScore");
+										                        int awayScore = (int) pick.get("awayScore");
+										                        String selectedTeam = (String) pick.get("selectedTeam");
+										                        String homeTeamName = (String) pick.get("homeTeamName");
+										
+										                        String selectedTeamAbbr = teamNameToAbbrev.get(selectedTeam);
+										                        String homeTeamAbbr = teamNameToAbbrev.get(homeTeamName);
+										                        boolean isHomeTeam = selectedTeamAbbr.equals(homeTeamAbbr);
+										                        boolean isWin = (homeScore > awayScore && isHomeTeam) || 
+										                                       (awayScore > homeScore && !isHomeTeam);
+										                        pickResult = isWin ? "pick-win" : "pick-loss";
+										                    }
+										                    pick.put("result", pickResult);
+										                    userPicks.add(pick);
+										                }
+										            }
+										        }
+										
+										        // Modified sort to put losses first, then pending, then wins
+										        Collections.sort(userPicks, new Comparator<Map<String, Object>>() {
+										            @Override
+										            public int compare(Map<String, Object> p1, Map<String, Object> p2) {
+										                String result1 = (String) p1.get("result");
+										                String result2 = (String) p2.get("result");
+										                
+										                // Loss = 2, pending = 1, win = 0
+										                int sort1 = "pick-loss".equals(result1) ? 2 : ("pick-pending".equals(result1) ? 1 : 0);
+										                int sort2 = "pick-loss".equals(result2) ? 2 : ("pick-pending".equals(result2) ? 1 : 0);
+										                
+										                return sort2 - sort1;
+										            }
+										        });
+										
+										        // Display up to 5 picks for this week
+										        int showCount = Math.min(userPicks.size(), 5);
+										        
+										        // CHANGE: Add spacers at the TOP to fill remaining slots
+										        for (int i = showCount; i < 5; i++) {
+										        %>
+										            <div class="team-logo logo-spacer"></div>
+										        <%
+										        }
+										        
+										        // Then display the actual picks at the bottom
+										        for (int i = 0; i < showCount; i++) {
+										            Map<String, Object> pick = userPicks.get(i);
+										            String teamAbbr = teamNameToAbbrev.get(pick.get("selectedTeam"));
+										            String pickResult = (String) pick.get("result");
+										        %>
+										            <div class="team-logo <%= pickResult %>" 
+										                 style="background-image: url('images/team-Logos/<%= teamAbbr.toLowerCase() %>-logo.svg')"
+										                 title="<%= pick.get("selectedTeam") %>">
+										            </div>
+										        <%
+										        }
+										
+										    } else {
+										    %>
+										        <span>-</span>
+										    <%
+										    }
+										    %>
+										    </div>
+										</td>
 						           <%
 						           }
 						           %>
