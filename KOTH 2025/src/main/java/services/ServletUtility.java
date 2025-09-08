@@ -148,12 +148,14 @@ public class ServletUtility {
     }
 
     public static User getUserFromContext(ServletContext context, String username) {
-        System.out.println("ServletUtility.getUserFromContext method started");
+        System.out.println("ServletUtility.getUserFromContext method started for username: " + username);
         @SuppressWarnings("unchecked")
         Map<String, User> userMap = (Map<String, User>) context.getAttribute("userMap");
         if (userMap != null) {
+            System.out.println("Found userMap with " + userMap.size() + " users: " + userMap.keySet());
             User user = userMap.get(username);
             if (user != null) {
+                System.out.println("Found user: " + username + " (ID: " + user.getIdUser() + ")");
                 return user;
             } else {
                 System.out.println("ServletUtility: User not found in context - Username: " + username);

@@ -136,12 +136,32 @@ public class HomeServlet {
 
     private Map<String, String> getUserFullNames(List<String> usernames, ServletContext context) {
         Map<String, String> fullNames = new HashMap<>();
+        
+        // Add this debug logging
+        @SuppressWarnings("unchecked")
+        Map<String, User> userMap = (Map<String, User>) context.getAttribute("userMap");
+        System.out.println("=== DEBUG: userMap status ===");
+        if (userMap != null) {
+            System.out.println("userMap found with " + userMap.size() + " users");
+            System.out.println("All usernames in map: " + userMap.keySet());
+            for (Map.Entry<String, User> entry : userMap.entrySet()) {
+                User user = entry.getValue();
+                System.out.println("  " + entry.getKey() + " -> ID: " + user.getIdUser() + 
+                                 ", Name: " + user.getFirstName() + " " + user.getLastName());
+            }
+        } else {
+            System.out.println("userMap is NULL!");
+        }
+        System.out.println("=== END DEBUG ===");
+        
         for (String username : usernames) {
-            User user = servletUtility.getUserFromContext(context, username); // ✅ Injected utility
+            User user = servletUtility.getUserFromContext(context, username);
             if (user != null) {
                 fullNames.put(username, user.getFirstName() + " " + user.getLastName());
+                System.out.println("SUCCESS: Found user data for: " + username + " (ID: " + user.getIdUser() + ")");
             } else {
                 fullNames.put(username, username);
+                System.out.println("FAILED: No user data found for: " + username);
             }
         }
         return fullNames;
