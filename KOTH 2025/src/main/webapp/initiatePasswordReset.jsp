@@ -1,7 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 
-<jsp:include page="header.jsp">
+<jsp:include page="headerForNotSignedIn.jsp">
 <jsp:param name="pageTitle" value="Initiate Password Reset" />
 </jsp:include>
 
@@ -19,7 +19,7 @@
     <form action="InitiatePasswordResetServlet" method="post">
         <div class="form-group">
             <label for="email">Email</label>
-            <input type="email" class="form-control" id="email" name="email" required maxlength="20" placeholder="e.g., john@example.com">
+            <input type="email" class="form-control" id="email" name="email" required maxlength="50" placeholder="e.g., john@example.com">
         </div>
         <button type="submit" class="btn btn-primary">Send Reset Link</button>
     </form>

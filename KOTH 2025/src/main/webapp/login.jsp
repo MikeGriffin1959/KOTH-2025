@@ -83,7 +83,7 @@
                 <label for="password">Password:</label>
                 <div class="d-flex align-items-center">
                     <input type="password" class="form-control" id="password" name="password" required maxlength="20">
-                    <a href="ResetPasswordServlet" class="forgot-password">Forgot Password?</a>
+                    <a href="InitiatePasswordResetServlet" class="forgot-password">Forgot Password?</a>
                 </div>
             </div>
             <button type="submit" class="btn btn-primary">Sign In</button>

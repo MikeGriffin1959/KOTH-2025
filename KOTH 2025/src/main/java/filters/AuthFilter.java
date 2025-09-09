@@ -11,11 +11,17 @@ public class AuthFilter implements Filter {
 
 	private static final Set<String> PUBLIC_PATHS = Set.of(
 			  "/", "/index.jsp",
-			  "/LoginServlet", "/login.jsp",
-			  "/SignUpServlet", "/InitiateUsernameRecoveryServlet", "/ResetPasswordServlet",
+			  "/LoginServlet", 
+			  "/login.jsp",
+			  "/SignUpServlet", 
+			  "/InitiateUsernameRecoveryServlet", 
+			  "/ResetPasswordServlet",
+			  "/InitiatePasswordResetServlet", 
 			  "/accessDenied.jsp",            
-			  "/health", "/status",
-			  "/styles.css", "/favicon.ico"
+			  "/health", 
+			  "/status",
+			  "/styles.css", 
+			  "/favicon.ico"
 			);
 
   private static boolean isPublic(HttpServletRequest req) {
