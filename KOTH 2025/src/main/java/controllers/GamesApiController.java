@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -45,7 +47,18 @@ public class GamesApiController {
     @GetMapping("/refresh")
     public ResponseEntity<Map<String, Object>> refreshGames(
             @RequestParam String season,
-            @RequestParam String week) {
+            @RequestParam String week,
+            HttpServletRequest request) {
+        
+        // Check if session is still valid
+        HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute("userName") == null) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("sessionExpired", true);
+            response.put("message", "Session expired");
+            return ResponseEntity.status(401).body(response);
+        }
         
         System.out.println("=== API ENDPOINT HIT: /api/games/refresh ===");
         System.out.println("Parameters - season: " + season + ", week: " + week);
