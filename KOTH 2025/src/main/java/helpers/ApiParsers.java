@@ -1,12 +1,19 @@
 package helpers;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Month;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
+import services.NFLSeasonCalculator;
 
-//import model.ESPNGame;
 import model.Game;
 import model.Team;
 
@@ -14,57 +21,144 @@ import model.Team;
 public class ApiParsers {
     
     public static List<Game> ParseESPNAPI(String apiResponse) {
-    	System.out.println("ApiParsers.ParseESPNAPI method started");
+        System.out.println("ApiParsers.ParseESPNAPI method started");
         List<Game> gamesList = new ArrayList<>();
         JSONObject jsonResponse = new JSONObject(apiResponse);
         JSONArray eventsArray = jsonResponse.getJSONArray("events");
+        
+        NFLSeasonCalculator calculator = new NFLSeasonCalculator();
+        int gamesSkipped = 0;
 
         for (int i = 0; i < eventsArray.length(); i++) {
             JSONObject eventObject = eventsArray.getJSONObject(i);
-            Game game = new Game();
-
-            game.setGameID(Integer.parseInt(eventObject.getString("id")));
-            game.setDate(eventObject.getString("date"));
-
-            JSONObject seasonObject = eventObject.getJSONObject("season");
-            game.setSeason(Integer.valueOf(seasonObject.getInt("year")));
-
-            JSONObject weekObject = eventObject.getJSONObject("week");
-            game.setWeek(Integer.valueOf(weekObject.getInt("number")));
-
-            JSONArray competitionsArray = eventObject.getJSONArray("competitions");
-            if (competitionsArray.length() > 0) {
-                JSONObject competitionObject = competitionsArray.getJSONObject(0);
+            
+            try {
+                // Extract basic game data first
+                String gameDate = eventObject.getString("date");
+                JSONObject seasonObject = eventObject.getJSONObject("season");
+                int gameSeason = seasonObject.getInt("year");
+                JSONObject weekObject = eventObject.getJSONObject("week");
+                int gameWeek = weekObject.getInt("number");
                 
-                JSONObject statusObject = competitionObject.getJSONObject("status");
-                game.setStatus(statusObject.getJSONObject("type").getString("name"));
+                // Validate the game date against expected NFL week
+                if (!isValidGameDate(gameDate, gameSeason, gameWeek, calculator)) {
+                    System.out.println("Skipping invalid game: Season " + gameSeason + 
+                                     ", Week " + gameWeek + ", Date " + gameDate);
+                    gamesSkipped++;
+                    continue;
+                }
+                
+                // If validation passes, create the game object
+                Game game = new Game();
+                game.setGameID(Integer.parseInt(eventObject.getString("id")));
+                game.setDate(gameDate);
+                game.setSeason(gameSeason);
+                game.setWeek(gameWeek);
 
-                JSONArray competitorsArray = competitionObject.getJSONArray("competitors");
-                for (int j = 0; j < competitorsArray.length(); j++) {
-                    JSONObject competitorObject = competitorsArray.getJSONObject(j);
-                    String homeAway = competitorObject.getString("homeAway");
-                    JSONObject teamObject = competitorObject.getJSONObject("team");
+                JSONArray competitionsArray = eventObject.getJSONArray("competitions");
+                if (competitionsArray.length() > 0) {
+                    JSONObject competitionObject = competitionsArray.getJSONObject(0);
+                    
+                    JSONObject statusObject = competitionObject.getJSONObject("status");
+                    game.setStatus(statusObject.getJSONObject("type").getString("name"));
 
-                    if (homeAway.equals("home")) {
-                        game.setHomeTeamId(teamObject.getInt("id"));
-                        game.setHomeScore(competitorObject.getInt("score"));
-                        game.setHomeTeamName(teamObject.getString("abbreviation"));
-                    } else {
-                        game.setAwayTeamId(teamObject.getInt("id"));
-                        game.setAwayScore(competitorObject.getInt("score"));
-                        game.setAwayTeamName(teamObject.getString("abbreviation"));
+                    JSONArray competitorsArray = competitionObject.getJSONArray("competitors");
+                    for (int j = 0; j < competitorsArray.length(); j++) {
+                        JSONObject competitorObject = competitorsArray.getJSONObject(j);
+                        String homeAway = competitorObject.getString("homeAway");
+                        JSONObject teamObject = competitorObject.getJSONObject("team");
+
+                        if (homeAway.equals("home")) {
+                            game.setHomeTeamId(teamObject.getInt("id"));
+                            game.setHomeScore(competitorObject.getInt("score"));
+                            game.setHomeTeamName(teamObject.getString("abbreviation"));
+                        } else {
+                            game.setAwayTeamId(teamObject.getInt("id"));
+                            game.setAwayScore(competitorObject.getInt("score"));
+                            game.setAwayTeamName(teamObject.getString("abbreviation"));
+                        }
                     }
                 }
+                gamesList.add(game);
+                
+            } catch (Exception e) {
+                System.err.println("Error parsing game at index " + i + ": " + e.getMessage());
+                gamesSkipped++;
+                continue;
             }
-            gamesList.add(game);
         }
-
+        
+        System.out.println("ApiParsers.ParseESPNAPI completed. Valid games: " + gamesList.size() + 
+                          ", Skipped games: " + gamesSkipped);
         return gamesList;
+    }
+    
+    /**
+     * Validates if a game date aligns with the expected NFL week timeframe
+     */
+    private static boolean isValidGameDate(String gameDate, int gameSeason, int gameWeek, NFLSeasonCalculator calculator) {
+        try {
+            // Parse the game date (ESPN format: "2024-09-10T00:30Z")
+            LocalDateTime gameDateTime = LocalDateTime.parse(gameDate, DateTimeFormatter.ISO_DATE_TIME);
+            
+            // Calculate expected date range for this NFL week
+            LocalDateTime expectedWeekStart = getExpectedWeekStart(gameSeason, gameWeek, calculator);
+            LocalDateTime expectedWeekEnd = expectedWeekStart.plusDays(7); // One week window
+            
+            // Allow some flexibility (±2 days) for edge cases
+            LocalDateTime validStart = expectedWeekStart.minusDays(2);
+            LocalDateTime validEnd = expectedWeekEnd.plusDays(2);
+            
+            boolean isValid = !gameDateTime.isBefore(validStart) && !gameDateTime.isAfter(validEnd);
+            
+            if (!isValid) {
+                System.out.println("Date validation failed for Season " + gameSeason + ", Week " + gameWeek + 
+                                 ": Game date " + gameDate + " outside expected range " + 
+                                 validStart.toLocalDate() + " to " + validEnd.toLocalDate());
+            }
+            
+            return isValid;
+            
+        } catch (Exception e) {
+            System.err.println("Error validating game date: " + gameDate + " - " + e.getMessage());
+            return false; // If we can't parse the date, reject the game
+        }
+    }
+    
+    /**
+     * Calculate the expected start date for a given NFL week
+     */
+    private static LocalDateTime getExpectedWeekStart(int season, int week, NFLSeasonCalculator calculator) {
+        // Get the season start date (this should match your NFLSeasonCalculator logic)
+        LocalDateTime seasonStart = getSeasonStartDateTime(season);
+        
+        // Calculate weeks since season start
+        // Week 1 starts at seasonStart, Week 2 starts 7 days later, etc.
+        return seasonStart.plusWeeks(week - 1);
+    }
+    
+    /**
+     * Get season start date/time (matches NFLSeasonCalculator logic exactly)
+     */
+    private static LocalDateTime getSeasonStartDateTime(int year) {
+        // Match the exact logic from NFLSeasonCalculator
+        LocalDate laborDay = LocalDate.of(year, Month.SEPTEMBER, 1)
+                .with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY));
+        LocalDate seasonStartDate = laborDay.plusDays(2); // Wednesday after Labor Day
+        LocalDateTime seasonStartDateTime = seasonStartDate.atTime(6, 0); // 6 AM on season start date
+        
+        // Adjust to previous Tuesday 6 AM
+        while (seasonStartDateTime.getDayOfWeek() != DayOfWeek.TUESDAY) {
+            seasonStartDateTime = seasonStartDateTime.minusDays(1);
+        }
+        return seasonStartDateTime;
     }
 
     public static List<Game> ParseESPNAPIMinimal(String apiResponse, int currentSeason, int currentWeek) {
         System.out.println("ApiParsers.ParseESPNAPIMinimal method started");
         List<Game> games = new ArrayList<>();
+        NFLSeasonCalculator calculator = new NFLSeasonCalculator();
+        
         try {
             JSONObject jsonObject = new JSONObject(apiResponse);
             JSONArray events = jsonObject.getJSONArray("events");
@@ -76,9 +170,17 @@ public class ApiParsers {
                 int seasonYear = event.getJSONObject("season").getInt("year");
                 int weekNumber = event.getJSONObject("week").getInt("number");
 
-                // ✅ Filter out games from other seasons or weeks
+                // Filter out games from other seasons or weeks
                 if (seasonYear != currentSeason || weekNumber != currentWeek) {
                     System.out.println("Skipping game from season " + seasonYear + ", week " + weekNumber);
+                    continue;
+                }
+                
+                // Add date validation for minimal parsing too
+                String gameDate = event.getString("date");
+                if (!isValidGameDate(gameDate, seasonYear, weekNumber, calculator)) {
+                    System.out.println("Skipping invalid game in minimal parsing: Season " + seasonYear + 
+                                     ", Week " + weekNumber + ", Date " + gameDate);
                     continue;
                 }
 
@@ -90,10 +192,7 @@ public class ApiParsers {
                 game.setGameID(Long.parseLong(event.getString("id")));
                 game.setSeason(seasonYear);
                 game.setWeek(weekNumber);
-
-                if (event.has("date")) {
-                    game.setDate(event.getString("date"));
-                }
+                game.setDate(gameDate);
 
                 game.setStatus(status.getJSONObject("type").getString("name"));
                 if (status.has("displayClock")) {
@@ -125,7 +224,7 @@ public class ApiParsers {
                     }
                 }
 
-                System.out.println("\nParsed game " + game.getGameID() + ":");
+                System.out.println("\nParsed valid game " + game.getGameID() + ":");
                 System.out.println("Season: " + game.getSeason() + ", Week: " + game.getWeek());
                 System.out.println("Teams: " + game.getAwayTeamName() + " @ " + game.getHomeTeamName());
                 System.out.println("Score: " + game.getAwayScore() + "-" + game.getHomeScore());
