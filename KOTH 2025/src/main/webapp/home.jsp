@@ -698,27 +698,29 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 										        });
 										
 										        // Display up to 5 picks for this week
-										        int showCount = Math.min(userPicks.size(), 5);
-										        
-										        // CHANGE: Add spacers at the TOP to fill remaining slots
-										        for (int i = showCount; i < 5; i++) {
-										        %>
-										            <div class="team-logo logo-spacer"></div>
-										        <%
-										        }
-										        
-										        // Then display the actual picks at the bottom
-										        for (int i = 0; i < showCount; i++) {
-										            Map<String, Object> pick = userPicks.get(i);
-										            String teamAbbr = teamNameToAbbrev.get(pick.get("selectedTeam"));
-										            String pickResult = (String) pick.get("result");
-										        %>
-										            <div class="team-logo <%= pickResult %>" 
-										                 style="background-image: url('images/team-Logos/<%= teamAbbr.toLowerCase() %>-logo.svg')"
-										                 title="<%= pick.get("selectedTeam") %>">
-										            </div>
-										        <%
-										        }
+										       	int showCount = Math.min(userPicks.size(), 5);
+
+												// CHANGE: Add spacers at the TOP to fill remaining slots
+												for (int i = showCount; i < 5; i++) {
+												%>
+												    <!-- DEBUG: Adding spacer <%= i %> for user <%= user %> week <%= weekNumber %> -->
+												    <div class="team-logo logo-spacer" style="visibility: hidden !important; width: 30px !important; height: 30px !important; margin: 1px auto !important; border: none !important;">SPACER</div>
+												<%
+												}
+												
+												// Then display the actual picks at the bottom
+												for (int i = 0; i < showCount; i++) {
+												    Map<String, Object> pick = userPicks.get(i);
+												    String teamAbbr = teamNameToAbbrev.get(pick.get("selectedTeam"));
+												    String pickResult = (String) pick.get("result");
+												%>
+												    <!-- DEBUG: Adding pick <%= i %> for user <%= user %> week <%= weekNumber %> -->
+												    <div class="team-logo <%= pickResult %>" 
+												         style="background-image: url('images/team-Logos/<%= teamAbbr.toLowerCase() %>-logo.svg')"
+												         title="<%= pick.get("selectedTeam") %>">
+												    </div>
+												<%
+												}
 										
 										    } else {
 										    %>
