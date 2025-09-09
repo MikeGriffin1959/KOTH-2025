@@ -772,6 +772,9 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                 });
             });
         }
+        
+     	// Simple page refresh every 5 minutes
+        setInterval(function() { location.reload(); }, 300000);
 
         let resizeTimer;
         window.addEventListener('load', () => {
