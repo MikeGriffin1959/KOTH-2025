@@ -200,6 +200,12 @@
                         <span class="page-name">Make Picks</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="MyScoreboardServlet">
+                        <i class="fa-solid fa-football-helmet"></i>
+                        <span class="page-name">My Scoreboard</span>
+                    </a>
+                </li>
                 <c:if test="${not empty sessionScope.isCommish and sessionScope.isCommish eq true}">
                     <li class="nav-item">
                         <a class="nav-link" href="CommissionerServlet">
