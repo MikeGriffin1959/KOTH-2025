@@ -31,16 +31,16 @@
             font-weight: bold;
         }
         .selected-1 {
-            border: 3px solid #28a745 !important;
-            box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.3) !important;
+            border: 1px solid #007bff !important;
+            box-shadow: 0 0 0 2px #007bff !important;
         }
         .selected-2 {
-            border: 3px solid #ffc107 !important;
-            box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.3) !important;
+            border: 1px solid #007bff !important;
+            box-shadow: 0 0 0 2px #007bff, 0 0 0 5px black, 0 0 0 8px #007bff !important;
         }
         .selected-3 {
-            border: 3px solid #dc3545 !important;
-            box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3) !important;
+            border: 1px solid #007bff !important;
+            box-shadow: 0 0 0 2px #007bff, 0 0 0 5px black, 0 0 0 8px #007bff, 0 0 0 11px black, 0 0 0 14px #007bff !important;
         }
         .team-logo-container {
             position: relative;
