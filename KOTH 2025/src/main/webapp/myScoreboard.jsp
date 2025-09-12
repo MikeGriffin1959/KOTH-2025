@@ -94,7 +94,41 @@
                     DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("EEEE MM/dd/yy hh:mm a", Locale.ENGLISH);
                     
                     if (games != null && !games.isEmpty()) {
-                        Comparator<Game> statusComparator = (g1, g2) -> {
+                        // Create a custom comparator based on user picks and popularity
+                        Comparator<Game> customComparator = (g1, g2) -> {
+                            String gameId1 = String.valueOf(g1.getGameID());
+                            String gameId2 = String.valueOf(g2.getGameID());
+                            
+                            // Check if user has picks for these games
+                            boolean userHasPick1 = false;
+                            boolean userHasPick2 = false;
+                            
+                            if (selectedPicks != null) {
+                                List<String> picks1 = selectedPicks.get(gameId1);
+                                List<String> picks2 = selectedPicks.get(gameId2);
+                                userHasPick1 = picks1 != null && !picks1.isEmpty();
+                                userHasPick2 = picks2 != null && !picks2.isEmpty();
+                            }
+                            
+                            // Calculate popularity scores for games
+                            int popularity1 = 0;
+                            int popularity2 = 0;
+                            
+                            if (teamPickCounts != null) {
+                                Integer awayPicks1 = teamPickCounts.get(g1.getAwayTeamName());
+                                Integer homePicks1 = teamPickCounts.get(g1.getHomeTeamName());
+                                Integer awayPicks2 = teamPickCounts.get(g2.getAwayTeamName());
+                                Integer homePicks2 = teamPickCounts.get(g2.getHomeTeamName());
+                                
+                                popularity1 = (awayPicks1 != null ? awayPicks1 : 0) + (homePicks1 != null ? homePicks1 : 0);
+                                popularity2 = (awayPicks2 != null ? awayPicks2 : 0) + (homePicks2 != null ? homePicks2 : 0);
+                            }
+                            
+                            // Priority 1: User's picks vs non-user picks
+                            if (userHasPick1 && !userHasPick2) return -1;
+                            if (!userHasPick1 && userHasPick2) return 1;
+                            
+                            // Priority 2: For user picks OR for non-user picks, sort by status importance
                             Map<String, Integer> statusPriority = Map.of(
                                 "In Progress", 1,
                                 "Scheduled", 2,
@@ -102,19 +136,40 @@
                                 "F/OT", 3
                             );
                             
-                            int priority1 = statusPriority.getOrDefault(g1.getStatus(), 4);
-                            int priority2 = statusPriority.getOrDefault(g2.getStatus(), 4);
+                            int status1 = statusPriority.getOrDefault(g1.getStatus(), 4);
+                            int status2 = statusPriority.getOrDefault(g2.getStatus(), 4);
                             
-                            if (priority1 != priority2) {
-                                return priority1 - priority2;
+                            if (status1 != status2) {
+                                return status1 - status2;
                             }
                             
+                            // Priority 3: For scheduled games, sort by date (earliest first)
+                            if ("Scheduled".equals(g1.getStatus()) && "Scheduled".equals(g2.getStatus())) {
+                                return LocalDateTime.parse(g1.getDate(), DateTimeFormatter.ISO_DATE_TIME)
+                                       .compareTo(LocalDateTime.parse(g2.getDate(), DateTimeFormatter.ISO_DATE_TIME));
+                            }
+                            
+                            // Priority 4: For final games, sort by date (most recent first)
+                            if (("Final".equals(g1.getStatus()) || "F/OT".equals(g1.getStatus())) && 
+                                ("Final".equals(g2.getStatus()) || "F/OT".equals(g2.getStatus()))) {
+                                return LocalDateTime.parse(g2.getDate(), DateTimeFormatter.ISO_DATE_TIME)
+                                       .compareTo(LocalDateTime.parse(g1.getDate(), DateTimeFormatter.ISO_DATE_TIME));
+                            }
+                            
+                            // Priority 5: If neither user has picks, sort by popularity (most popular first)
+                            if (!userHasPick1 && !userHasPick2) {
+                                if (popularity1 != popularity2) {
+                                    return popularity2 - popularity1; // Higher popularity first
+                                }
+                            }
+                            
+                            // Final fallback: sort by game date
                             return LocalDateTime.parse(g1.getDate(), DateTimeFormatter.ISO_DATE_TIME)
                                    .compareTo(LocalDateTime.parse(g2.getDate(), DateTimeFormatter.ISO_DATE_TIME));
                         };
                         
                         games = games.stream()
-                                    .sorted(statusComparator)
+                                    .sorted(customComparator)
                                     .collect(Collectors.toList());
                         
                         for (Game game : games) {
