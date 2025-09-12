@@ -388,11 +388,14 @@
             const homeScoreSpan = gameCard.querySelector('.home-score-info');
             
             if (game.status === 'Scheduled') {
-                // Keep odds display for scheduled games
-                if (awayScoreSpan) awayScoreSpan.textContent = `o${game.overUnder || 'N/A'}`;
+                // Keep odds display for scheduled games - FIX: Handle null/undefined over/under
+                if (awayScoreSpan) {
+                    const overUnder = game.overUnder !== null && game.overUnder !== undefined ? game.overUnder : 'N/A';
+                    awayScoreSpan.textContent = `o${overUnder}`;
+                }
                 if (homeScoreSpan) {
                     const spread = game.pointSpread;
-                    homeScoreSpan.textContent = spread !== null ? 
+                    homeScoreSpan.textContent = spread !== null && spread !== undefined ? 
                         (spread >= 0 ? `+${spread}` : spread) : 'N/A';
                 }
             } else {
