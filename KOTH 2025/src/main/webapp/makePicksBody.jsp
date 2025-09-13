@@ -636,13 +636,10 @@
             const homeScoreSpan = gameCard.querySelector('.home-score-info');
             
             if (game.status === 'Scheduled') {
-                // Keep odds display for scheduled games
-                if (awayScoreSpan) awayScoreSpan.textContent = `o${game.overUnder || 'N/A'}`;
-                if (homeScoreSpan) {
-                    const spread = game.pointSpread;
-                    homeScoreSpan.textContent = spread !== null ? 
-                        (spread >= 0 ? `+${spread}` : spread) : 'N/A';
-                }
+                // For scheduled games, skip updating odds/over-under during refresh
+                // This preserves the initial page load values and avoids blank displays
+                // The odds are already correctly displayed from the initial page load
+                console.log(`Skipping odds update for scheduled game ${game.gameID} to preserve display`);
             } else {
                 // Update scores for in-progress or final games
                 if (awayScoreSpan) {
@@ -666,8 +663,6 @@
             const statusBadge = gameCard.querySelector('.badge');
             if (statusBadge) {
                 statusBadge.textContent = game.status;
-                
-                // Update badge classes
                 statusBadge.className = 'badge ' + getBadgeClass(game.status);
             }
             
@@ -687,14 +682,6 @@
             } else if (gameTimeInfo) {
                 // Remove time info for non-in-progress games
                 gameTimeInfo.remove();
-            }
-            
-            // Disable team selection for non-scheduled games (unless commissioner override)
-            if (!isCommissionerOverride() && game.status !== 'Scheduled') {
-                gameCard.querySelectorAll('.team-logo').forEach(logo => {
-                    logo.style.pointerEvents = 'none';
-                    logo.style.opacity = '0.5';
-                });
             }
         });
     }
