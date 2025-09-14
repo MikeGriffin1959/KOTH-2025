@@ -290,10 +290,17 @@
                                                 </span>
                                                 <% if ("In Progress".equals(displayStatus) && game.getDisplayClock() != null && game.getPeriod() != null) { %>
 												    <div class="game-time-info mt-2">
-												        <% if ("2".equals(String.valueOf(game.getPeriod())) && "0:00".equals(game.getDisplayClock())) { %>
+												        <% 
+												            String period = String.valueOf(game.getPeriod());
+												            String clock = game.getDisplayClock();
+												            
+												            if ("2".equals(period) && "0:00".equals(clock)) { 
+												        %>
 												            Halftime
+												        <% } else if (Integer.parseInt(period) > 4) { %>
+												            OT <%= clock %>
 												        <% } else { %>
-												            Q<%= game.getPeriod() %> <%= game.getDisplayClock() %>
+												            Q<%= period %> <%= clock %>
 												        <% } %>
 												    </div>
 												<% } %>
