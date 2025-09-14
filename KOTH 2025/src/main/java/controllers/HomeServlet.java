@@ -140,7 +140,7 @@ public class HomeServlet {
         // Add this debug logging
         @SuppressWarnings("unchecked")
         Map<String, User> userMap = (Map<String, User>) context.getAttribute("userMap");
-        System.out.println("=== DEBUG: userMap status ===");
+        System.out.println("=== DEBUG: Home Servlet - userMap status ===");
         if (userMap != null) {
             System.out.println("userMap found with " + userMap.size() + " users");
             System.out.println("All usernames in map: " + userMap.keySet());

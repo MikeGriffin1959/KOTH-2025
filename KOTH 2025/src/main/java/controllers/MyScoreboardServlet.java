@@ -326,23 +326,23 @@ public class MyScoreboardServlet {
         Map<String, Integer> teamPickCounts = new HashMap<>();
         
         try {
-            System.out.println("DEBUG: Calculating team pick counts for season " + seasonInt + ", week " + weekInt);
+            System.out.println("DEBUG: My Scoreboard Servlet - Calculating team pick counts for season " + seasonInt + ", week " + weekInt);
             
             // Get all picks for the current week across all users
             Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData =
                     sqlConnectorPicksTable.getPicksForAllWeeks(seasonInt, weekInt);
             
-            System.out.println("DEBUG: allWeeksData = " + allWeeksData);
+            System.out.println("DEBUG: My Scoreboard Servlet - allWeeksData = " + allWeeksData);
             
             Map<String, List<Map<String, Object>>> weekData = allWeeksData.get(weekInt);
-            System.out.println("DEBUG: weekData for week " + weekInt + " = " + weekData);
+            System.out.println("DEBUG: My Scoreboard Servlet - weekData for week " + weekInt + " = " + weekData);
             
             if (weekData != null) {
                 for (List<Map<String, Object>> gamePicks : weekData.values()) {
-                    System.out.println("DEBUG: Processing game with " + gamePicks.size() + " picks");
+                    System.out.println("DEBUG: My Scoreboard Servlet - Processing game with " + gamePicks.size() + " picks");
                     for (Map<String, Object> pick : gamePicks) {
                         String selectedTeam = (String) pick.get("selectedTeam");
-                        System.out.println("DEBUG: Found pick for team: " + selectedTeam);
+                        System.out.println("DEBUG: My Scoreboard Servlet - Found pick for team: " + selectedTeam);
                         if (selectedTeam != null) {
                             teamPickCounts.merge(selectedTeam, 1, Integer::sum);
                         }
@@ -350,7 +350,7 @@ public class MyScoreboardServlet {
                 }
             }
             
-            System.out.println("DEBUG: Final teamPickCounts = " + teamPickCounts);
+            System.out.println("DEBUG: My Scoreboard Servlet - Final teamPickCounts = " + teamPickCounts);
         } catch (Exception e) {
             System.err.println("Error calculating team pick counts: " + e.getMessage());
             e.printStackTrace();

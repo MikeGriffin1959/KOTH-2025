@@ -311,184 +311,72 @@
 </div>
 
 <script>
-    // Auto-refresh functionality for game scores and status
-    let autoRefreshInterval;
-    let isRefreshing = false;
+//Auto-refresh functionality for My Scoreboard - Full page reload
+let autoRefreshInterval;
 
-    function startAutoRefresh() {
-        // Refresh every 5 minutes (300000 ms)
-        autoRefreshInterval = setInterval(refreshGameData, 300000);
-        console.log("Auto-refresh started - will update every 5 minutes");
+function startAutoRefresh() {
+    // Refresh every 30 seconds with full page reload
+    autoRefreshInterval = setInterval(refreshPage, 30000);
+    console.log("Auto-refresh started - full page reload every 30 seconds");
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        console.log("Auto-refresh stopped");
     }
+}
 
-    function stopAutoRefresh() {
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-            autoRefreshInterval = null;
-            console.log("Auto-refresh stopped");
+function refreshPage() {
+    console.log("Refreshing page...");
+    
+    // Show a subtle refresh indicator before reload
+    showRefreshIndicator();
+    
+    // Small delay to show the indicator, then reload
+    setTimeout(() => {
+        window.location.reload();
+    }, 500);
+}
+
+function showRefreshIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'refresh-indicator';
+    indicator.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Updating...';
+    indicator.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #007bff;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        z-index: 10000;
+        font-size: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        opacity: 0.9;
+    `;
+    document.body.appendChild(indicator);
+}
+
+window.onload = function() {
+    console.log("My Scoreboard loaded");
+    
+    // Start auto-refresh
+    startAutoRefresh();
+    
+    // Add visibility change handler to pause/resume refresh when tab is not visible
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            stopAutoRefresh();
+            console.log("Tab hidden - auto-refresh paused");
+        } else {
+            startAutoRefresh();
+            console.log("Tab visible - auto-refresh resumed");
         }
-    }
-
-    function refreshGameData() {
-        if (isRefreshing) {
-            console.log("Refresh already in progress, skipping...");
-            return;
-        }
-        
-        isRefreshing = true;
-        console.log("Refreshing game data...");
-        
-        // Get current season and week from page attributes
-        const season = '${requestScope.season}';
-        const week = '${requestScope.currentWeek}';
-        
-        if (!season || !week) {
-            console.error("Cannot find season/week values for refresh");
-            isRefreshing = false;
-            return;
-        }
-        
-        // Make AJAX call to get updated game data
-        fetch(`/KOTH-2025/api/games/refresh?season=${season}&week=${week}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                updateGameCards(data.games);
-                console.log("Game data refreshed successfully");
-                showRefreshIndicator();
-            } else {
-                console.error("Server returned error:", data.message);
-            }
-        })
-        .catch(error => {
-            console.error("Error refreshing game data:", error);
-        })
-        .finally(() => {
-            isRefreshing = false;
-        });
-    }
-
-    function updateGameCards(games) {
-        games.forEach(game => {
-            const gameCard = document.getElementById(game.gameID);
-            if (!gameCard) return;
-            
-            // Update scores
-            const awayScoreSpan = gameCard.querySelector('.away-score-info');
-            const homeScoreSpan = gameCard.querySelector('.home-score-info');
-            
-            if (game.status === 'Scheduled') {
-                // For scheduled games, skip updating odds/over-under during refresh
-                // This preserves the initial page load values and avoids blank displays
-                // The odds are already correctly displayed from the initial page load
-                console.log(`Skipping odds update for scheduled game ${game.gameID} to preserve display`);
-            } else {
-                // Update scores for in-progress or final games
-                if (awayScoreSpan) {
-                    const isFinal = game.status === 'Final' || game.status === 'F/OT';
-                    const awayWon = isFinal && game.awayScore > game.homeScore;
-                    awayScoreSpan.innerHTML = awayWon ? 
-                        `<span class="winning-score">${game.awayScore}</span>` : 
-                        game.awayScore;
-                }
-                
-                if (homeScoreSpan) {
-                    const isFinal = game.status === 'Final' || game.status === 'F/OT';
-                    const homeWon = isFinal && game.homeScore > game.awayScore;
-                    homeScoreSpan.innerHTML = homeWon ? 
-                        `<span class="winning-score">${game.homeScore}</span>` : 
-                        game.homeScore;
-                }
-            }
-            
-            // Update game status badge
-            const statusBadge = gameCard.querySelector('.badge');
-            if (statusBadge) {
-                statusBadge.textContent = game.status;
-                statusBadge.className = 'badge ' + getBadgeClass(game.status);
-            }
-            
-            // Update game time info for in-progress games
-            const gameTimeInfo = gameCard.querySelector('.game-time-info');
-            if (game.status === 'In Progress' && game.displayClock && game.period) {
-                if (gameTimeInfo) {
-                    gameTimeInfo.textContent = `Q${game.period} ${game.displayClock}`;
-                } else {
-                    // Create time info if it doesn't exist
-                    const statusDiv = gameCard.querySelector('.text-center.game-status');
-                    const timeDiv = document.createElement('div');
-                    timeDiv.className = 'game-time-info mt-2';
-                    timeDiv.textContent = `Q${game.period} ${game.displayClock}`;
-                    statusDiv.appendChild(timeDiv);
-                }
-            } else if (gameTimeInfo) {
-                // Remove time info for non-in-progress games
-                gameTimeInfo.remove();
-            }
-        });
-    }
-
-    function getBadgeClass(status) {
-        switch(status) {
-            case 'Scheduled': return 'badge-success';
-            case 'In Progress': return 'badge-info';
-            case 'Final':
-            case 'F/OT': return 'badge-primary';
-            default: return 'badge-info';
-        }
-    }
-
-    function showRefreshIndicator() {
-        const indicator = document.createElement('div');
-        indicator.id = 'refresh-indicator';
-        indicator.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Updated scores';
-        indicator.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #28a745;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            z-index: 10000;
-            font-size: 14px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        `;
-        document.body.appendChild(indicator);
-        
-        setTimeout(() => {
-            const elem = document.getElementById('refresh-indicator');
-            if (elem) elem.remove();
-        }, 3000);
-    }
-
-    window.onload = function() {
-        console.log("My Scoreboard loaded");
-        
-        // Start auto-refresh
-        startAutoRefresh();
-        
-        // Add visibility change handler to pause/resume refresh when tab is not visible
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                stopAutoRefresh();
-                console.log("Tab hidden - auto-refresh paused");
-            } else {
-                startAutoRefresh();
-                console.log("Tab visible - auto-refresh resumed");
-            }
-        });
-    };
+    });
+};
 </script>
 </body>
 </html>
