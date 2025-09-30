@@ -196,43 +196,49 @@ public class HomeServlet {
         request.setAttribute("teamResults", teamResults);
     }
 
-    private void calculateTeamPickCountsAndResults(Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData,
-                                                   int currentWeekInt, Map<String, Integer> teamPickCounts,
-                                                   Map<String, Boolean> teamResults,
-                                                   Map<String, String> teamNameToAbbrev) {
-
-        if (teamNameToAbbrev == null) {
-            System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
-            return;
-        }
-
-        Map<String, List<Map<String, Object>>> weekData = optimizedData.get(currentWeekInt);
-        if (weekData == null) return;
-
-        for (List<Map<String, Object>> gamePicks : weekData.values()) {
-            if (!gamePicks.isEmpty()) {
-                Map<String, Object> game = gamePicks.get(0);
-
-                // Count picks
-                for (Map<String, Object> pick : gamePicks) {
-                    String selectedTeam = (String) pick.get("selectedTeam");
-                    if (selectedTeam != null) {
-                        teamPickCounts.merge(selectedTeam, 1, Integer::sum);
-                    }
-                }
-
-                // Store results
-                if (game.get("status") != null && game.get("status").toString().contains("FINAL")) {
-                    String homeTeam = (String) game.get("homeTeamName");
-                    String awayTeam = (String) game.get("awayTeamName");
-                    int homeScore = (int) game.get("homeScore");
-                    int awayScore = (int) game.get("awayScore");
-
-                    boolean homeTeamWon = homeScore > awayScore;
-                    teamResults.put(teamNameToAbbrev.get(homeTeam), homeTeamWon);
-                    teamResults.put(teamNameToAbbrev.get(awayTeam), !homeTeamWon);
-                }
-            }
-        }
-    }
+	private void calculateTeamPickCountsAndResults(Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData,
+	                                               int currentWeekInt, Map<String, Integer> teamPickCounts,
+	                                               Map<String, Boolean> teamResults,
+	                                               Map<String, String> teamNameToAbbrev) {
+	
+	    if (teamNameToAbbrev == null) {
+	        System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
+	        return;
+	    }
+	
+	    Map<String, List<Map<String, Object>>> weekData = optimizedData.get(currentWeekInt);
+	    if (weekData == null) return;
+	
+	    for (List<Map<String, Object>> gamePicks : weekData.values()) {
+	        if (!gamePicks.isEmpty()) {
+	            Map<String, Object> game = gamePicks.get(0);
+	
+	            // Count picks
+	            for (Map<String, Object> pick : gamePicks) {
+	                String selectedTeam = (String) pick.get("selectedTeam");
+	                if (selectedTeam != null) {
+	                    teamPickCounts.merge(selectedTeam, 1, Integer::sum);
+	                }
+	            }
+	
+	            // Store results
+	            if (game.get("status") != null && game.get("status").toString().contains("FINAL")) {
+	                String homeTeam = (String) game.get("homeTeamName");
+	                String awayTeam = (String) game.get("awayTeamName");
+	                int homeScore = (int) game.get("homeScore");
+	                int awayScore = (int) game.get("awayScore");
+	
+	                if (homeScore == awayScore) {
+	                    // Tie - both teams lose
+	                    teamResults.put(teamNameToAbbrev.get(homeTeam), false);
+	                    teamResults.put(teamNameToAbbrev.get(awayTeam), false);
+	                } else {
+	                    boolean homeTeamWon = homeScore > awayScore;
+	                    teamResults.put(teamNameToAbbrev.get(homeTeam), homeTeamWon);
+	                    teamResults.put(teamNameToAbbrev.get(awayTeam), !homeTeamWon);
+	                }
+	            }
+	        }
+	    }
+	}
 }
