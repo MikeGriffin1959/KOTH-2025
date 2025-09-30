@@ -638,7 +638,6 @@ public class CommonProcessingService {
 
     private Boolean isWinningPick(Map<String, Object> pick, Map<String, String> teamNameToAbbrev) {
         String status = (String) pick.get("status");
-//        System.out.println("  Status: " + status);  // Add logging
         
         if ("Final".equals(status) || "F/OT".equals(status) || "STATUS_FINAL".equals(status)) {
             int homeScore = safeCastToInteger(pick.get("homeScore"));
@@ -647,27 +646,22 @@ public class CommonProcessingService {
             String homeTeamName = (String) pick.get("homeTeamName");
             String awayTeamName = (String) pick.get("awayTeamName");
 
-//            System.out.println("  Pick details:"); // Add logging
-//            System.out.println("    Selected: " + selectedTeam);
-//            System.out.println("    Home: " + homeTeamName + " (" + homeScore + ")");
-//            System.out.println("    Away: " + awayTeamName + " (" + awayScore + ")");
-
             if (selectedTeam != null && homeTeamName != null && awayTeamName != null) {
                 boolean isHomeTeam = isTeamMatch(selectedTeam, homeTeamName, teamNameToAbbrev);
                 boolean isAwayTeam = isTeamMatch(selectedTeam, awayTeamName, teamNameToAbbrev);
 
-//                System.out.println("  Is Home Team? " + isHomeTeam);
-//                System.out.println("  Is Away Team? " + isAwayTeam);
-
-                if (homeScore != awayScore) {  // Ensure there's a winner
-                    boolean isWin = (homeScore > awayScore && isHomeTeam) || 
-                                  (awayScore > homeScore && isAwayTeam);
-//                    System.out.println("  Result: " + (isWin ? "WIN" : "LOSS"));
-                    return isWin;
+                // Handle tie - it's a loss
+                if (homeScore == awayScore) {
+                    return false;
                 }
+                
+                // Handle win/loss
+                boolean isWin = (homeScore > awayScore && isHomeTeam) || 
+                              (awayScore > homeScore && isAwayTeam);
+                return isWin;
             }
         }
-        return null; // Game not final or no clear winner yet
+        return null; // Game not final or missing data
     }
 
     private int safeCastToInteger(Object value) {
