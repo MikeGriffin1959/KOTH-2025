@@ -79,7 +79,7 @@ public class NFLSeasonCalculator {
 
     private LocalDateTime getSeasonStartDateTime(int year) {
         LocalDate seasonStartDate = getSeasonStartDate(year);
-        LocalDateTime seasonStartDateTime = seasonStartDate.atTime(6, 0); // 6 AM on season start date
+        LocalDateTime seasonStartDateTime = seasonStartDate.atTime(14, 0); // 2PM on season start date
         // Adjust to previous Tuesday 6 AM
         while (seasonStartDateTime.getDayOfWeek() != DayOfWeek.TUESDAY) {
             seasonStartDateTime = seasonStartDateTime.minusDays(1);
