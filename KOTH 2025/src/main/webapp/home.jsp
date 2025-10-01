@@ -34,6 +34,7 @@ String[] weekLabels = new String[endWeek - startWeek + 1];
 for (int i = startWeek; i <= endWeek; i++) {
 	weekLabels[i - startWeek] = i > 18 ? playoffRoundNames.get(i) : String.valueOf(i);
 }
+
 Boolean userHasPaid = (Boolean) request.getAttribute("userHasPaid");
 
 // Retrieve other data attributes
@@ -127,7 +128,7 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 	    width: 80px;
 	    min-width: 120px;
 	    max-width: 30px;
-	    padding: 5px;
+	    padding: 3px 5px;
 	    text-align: left;
 	    cursor: pointer;
 	    overflow: hidden;
@@ -190,14 +191,14 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
     	display: block; 
 	}
 	
-	/* was flex; switch to a 5-row grid */
+	/* Dynamic height for logo containers - per user basis */
 	td.week-column .logo-container {
 	    display: grid;
-	    grid-template-rows: repeat(5, 1fr); /* 5 equal rows */
 	    align-items: center;
 	    justify-items: center;
-	    row-gap: 2px; /* optional: same visual spacing as before */
+	    row-gap: 2px;
 	    transform: none;
+	    /* Grid rows will be set dynamically per user */
 	}
 	
 	/* Pick circles styles */
@@ -510,19 +511,21 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
     .col-md-4 {
         margin-left: -5px;  /* Move the entire column left */
     }
+}
     
-	/* invisible placeholder that still takes space */
-	.logo-spacer {
-	    visibility: hidden;      /* keeps the space, hides content */
-	    border: none !important; /* no border outline */
-	}
-	.team-item.winner .team-logo {
-	    border-color: green !important;
-	}
-	
-	.team-item.loser .team-logo {
-	    border-color: red !important;
-	}
+/* invisible placeholder that still takes space */
+.logo-spacer {
+    visibility: hidden;      /* keeps the space, hides content */
+    border: none !important; /* no border outline */
+}
+
+.team-item.winner .team-logo {
+    border-color: green !important;
+}
+
+.team-item.loser .team-logo {
+    border-color: red !important;
+}
 	</style>
     <script>
         function goToMakePicks(username) {
@@ -648,9 +651,14 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 						           <%
 						           for (int weekNumber = startWeek; weekNumber <= endWeek; weekNumber++) {
 						               boolean weekDataExists = optimizedData != null && optimizedData.containsKey(weekNumber);
+						            // Calculate this user's row height (minimum 2)
+						               int userRowHeight = Math.max(2, userInitialPicks);
+						               if (userInitialPicks <= 2) {
+						                   System.out.println("DEBUG: User=" + user + ", userInitialPicks=" + userInitialPicks + ", userRowHeight=" + userRowHeight + ", week=" + weekNumber);
+						               }
 						           %>
 						               <td class="week-column">
-    										<div class="logo-container">
+    										<div class="logo-container" style="grid-template-rows: repeat(<%= userRowHeight %>, 1fr);">
 										    <% 
 										    if (weekDataExists) {
 										        List<Map<String, Object>> userPicks = new ArrayList<>();
@@ -697,14 +705,12 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 										            }
 										        });
 										
-										        // Display up to 5 picks for this week
-										       	int showCount = Math.min(userPicks.size(), 5);
+										        int showCount = userPicks.size();
 
-												// CHANGE: Add spacers at the TOP to fill remaining slots
-												for (int i = showCount; i < 5; i++) {
+												// Add spacers at the TOP to fill remaining slots
+												for (int i = showCount; i < userRowHeight; i++) {
 												%>
-												    <!-- DEBUG: Adding spacer <%= i %> for user <%= user %> week <%= weekNumber %> -->
-												    <div class="team-logo logo-spacer" style="visibility: hidden !important; width: 30px !important; height: 30px !important; margin: 1px auto !important; border: none !important;">SPACER</div>
+												    <div class="team-logo logo-spacer" style="visibility: hidden !important; width: 30px !important; height: 30px !important; margin: 1px auto !important; border: none !important;"></div>
 												<%
 												}
 												
@@ -714,7 +720,6 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 												    String teamAbbr = teamNameToAbbrev.get(pick.get("selectedTeam"));
 												    String pickResult = (String) pick.get("result");
 												%>
-												    <!-- DEBUG: Adding pick <%= i %> for user <%= user %> week <%= weekNumber %> -->
 												    <div class="team-logo <%= pickResult %>" 
 												         style="background-image: url('images/team-Logos/<%= teamAbbr.toLowerCase() %>-logo.svg')"
 												         title="<%= pick.get("selectedTeam") %>">
@@ -724,7 +729,9 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 										
 										    } else {
 										    %>
-										        <span>-</span>
+										        <div style="grid-row: 1 / -1; display: flex; align-items: center; justify-content: center;">
+										            <span>-</span>
+										        </div>
 										    <%
 										    }
 										    %>
