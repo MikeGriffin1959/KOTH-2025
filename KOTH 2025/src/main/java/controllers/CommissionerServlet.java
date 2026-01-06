@@ -457,7 +457,7 @@ public class CommissionerServlet {
             throw new IOException("Received empty response from ESPN Full Season Schedule API");
         }
         System.out.println("CommissionerServlet: Parsing ESPN API response");
-        List<Game> games = ApiParsers.ParseESPNAPI(espnApiResponse);
+        List<Game> games = ApiParsers.ParseESPNAPI(espnApiResponse, ApiFetchers.NFLSeasonType.REGULAR_SEASON);
         if (games == null || games.isEmpty()) {
             throw new IllegalStateException("No games parsed from ESPN API response");
         }

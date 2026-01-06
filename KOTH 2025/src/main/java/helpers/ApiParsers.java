@@ -5,22 +5,22 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
-import services.NFLSeasonCalculator;
 
+import helpers.ApiFetchers.NFLSeasonType;
 import model.Game;
 import model.Team;
+import services.NFLSeasonCalculator;
 
 @Service
 public class ApiParsers {
     
-    public static List<Game> ParseESPNAPI(String apiResponse) {
+    public static List<Game> ParseESPNAPI(String apiResponse, NFLSeasonType seasonType) {
         System.out.println("ApiParsers.ParseESPNAPI method started");
         List<Game> gamesList = new ArrayList<>();
         JSONObject jsonResponse = new JSONObject(apiResponse);
@@ -33,22 +33,19 @@ public class ApiParsers {
             JSONObject eventObject = eventsArray.getJSONObject(i);
             
             try {
-                // Extract basic game data first
                 String gameDate = eventObject.getString("date");
                 JSONObject seasonObject = eventObject.getJSONObject("season");
                 int gameSeason = seasonObject.getInt("year");
                 JSONObject weekObject = eventObject.getJSONObject("week");
                 int gameWeek = weekObject.getInt("number");
                 
-                // Validate the game date against expected NFL week
-                if (!isValidGameDate(gameDate, gameSeason, gameWeek, calculator)) {
+                if (!isValidGameDate(gameDate, gameSeason, gameWeek, seasonType, calculator)) {
                     System.out.println("Skipping invalid game: Season " + gameSeason + 
                                      ", Week " + gameWeek + ", Date " + gameDate);
                     gamesSkipped++;
                     continue;
                 }
                 
-                // If validation passes, create the game object
                 Game game = new Game();
                 game.setGameID(Integer.parseInt(eventObject.getString("id")));
                 game.setDate(gameDate);
@@ -96,24 +93,32 @@ public class ApiParsers {
     /**
      * Validates if a game date aligns with the expected NFL week timeframe
      */
-    private static boolean isValidGameDate(String gameDate, int gameSeason, int gameWeek, NFLSeasonCalculator calculator) {
+    private static boolean isValidGameDate(String gameDate, int gameSeason, int gameWeek, 
+                                           NFLSeasonType seasonType, NFLSeasonCalculator calculator) {
         try {
-            // Parse the game date (ESPN format: "2024-09-10T00:30Z")
             LocalDateTime gameDateTime = LocalDateTime.parse(gameDate, DateTimeFormatter.ISO_DATE_TIME);
             
-            // Calculate expected date range for this NFL week
-            LocalDateTime expectedWeekStart = getExpectedWeekStart(gameSeason, gameWeek, calculator);
-            LocalDateTime expectedWeekEnd = expectedWeekStart.plusDays(7); // One week window
+            LocalDateTime expectedWeekStart;
+            if (seasonType == NFLSeasonType.PLAYOFFS) {
+                // Playoffs occur in January of the year AFTER the season
+                // Wild Card (week 1) typically starts around Jan 10-12
+                LocalDateTime playoffStart = LocalDateTime.of(gameSeason + 1, Month.JANUARY, 8, 0, 0);
+                expectedWeekStart = playoffStart.plusWeeks(gameWeek - 1);
+            } else {
+                expectedWeekStart = getExpectedWeekStart(gameSeason, gameWeek, calculator);
+            }
             
-            // Allow some flexibility (±2 days) for edge cases
-            LocalDateTime validStart = expectedWeekStart.minusDays(2);
-            LocalDateTime validEnd = expectedWeekEnd.plusDays(2);
+            LocalDateTime expectedWeekEnd = expectedWeekStart.plusDays(7);
+            
+            // Allow flexibility (±3 days) for edge cases
+            LocalDateTime validStart = expectedWeekStart.minusDays(3);
+            LocalDateTime validEnd = expectedWeekEnd.plusDays(3);
             
             boolean isValid = !gameDateTime.isBefore(validStart) && !gameDateTime.isAfter(validEnd);
             
             if (!isValid) {
                 System.out.println("Date validation failed for Season " + gameSeason + ", Week " + gameWeek + 
-                                 ": Game date " + gameDate + " outside expected range " + 
+                                 " (" + seasonType + "): Game date " + gameDate + " outside expected range " + 
                                  validStart.toLocalDate() + " to " + validEnd.toLocalDate());
             }
             
@@ -121,19 +126,15 @@ public class ApiParsers {
             
         } catch (Exception e) {
             System.err.println("Error validating game date: " + gameDate + " - " + e.getMessage());
-            return false; // If we can't parse the date, reject the game
+            return false;
         }
     }
     
     /**
-     * Calculate the expected start date for a given NFL week
+     * Calculate the expected start date for a given NFL regular season week
      */
     private static LocalDateTime getExpectedWeekStart(int season, int week, NFLSeasonCalculator calculator) {
-        // Get the season start date (this should match your NFLSeasonCalculator logic)
         LocalDateTime seasonStart = getSeasonStartDateTime(season);
-        
-        // Calculate weeks since season start
-        // Week 1 starts at seasonStart, Week 2 starts 7 days later, etc.
         return seasonStart.plusWeeks(week - 1);
     }
     
@@ -141,7 +142,6 @@ public class ApiParsers {
      * Get season start date/time (matches NFLSeasonCalculator logic exactly)
      */
     private static LocalDateTime getSeasonStartDateTime(int year) {
-        // Match the exact logic from NFLSeasonCalculator
         LocalDate laborDay = LocalDate.of(year, Month.SEPTEMBER, 1)
                 .with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY));
         LocalDate seasonStartDate = laborDay.plusDays(2); // Wednesday after Labor Day
@@ -154,8 +154,19 @@ public class ApiParsers {
         return seasonStartDateTime;
     }
 
-    public static List<Game> ParseESPNAPIMinimal(String apiResponse, int currentSeason, int currentWeek) {
+    /**
+     * Parse ESPN API response with minimal data extraction.
+     * 
+     * @param apiResponse The raw JSON response from ESPN API
+     * @param currentSeason The NFL season year
+     * @param espnWeek The ESPN week number (used for filtering API response)
+     * @param internalWeek Your internal week number (used for storage - e.g., 19 for Wild Card)
+     * @param seasonType REGULAR_SEASON or PLAYOFFS
+     * @return List of parsed Game objects
+     */
+    public static List<Game> ParseESPNAPIMinimal(String apiResponse, int currentSeason, int espnWeek, int internalWeek, NFLSeasonType seasonType) {
         System.out.println("ApiParsers.ParseESPNAPIMinimal method started");
+        System.out.println("  ESPN Week (for filtering): " + espnWeek + ", Internal Week (for storage): " + internalWeek);
         List<Game> games = new ArrayList<>();
         NFLSeasonCalculator calculator = new NFLSeasonCalculator();
         
@@ -166,19 +177,17 @@ public class ApiParsers {
             for (int i = 0; i < events.length(); i++) {
                 JSONObject event = events.getJSONObject(i);
 
-                // Extract season and week
                 int seasonYear = event.getJSONObject("season").getInt("year");
                 int weekNumber = event.getJSONObject("week").getInt("number");
 
-                // Filter out games from other seasons or weeks
-                if (seasonYear != currentSeason || weekNumber != currentWeek) {
+                // Filter using ESPN's week number
+                if (seasonYear != currentSeason || weekNumber != espnWeek) {
                     System.out.println("Skipping game from season " + seasonYear + ", week " + weekNumber);
                     continue;
                 }
                 
-                // Add date validation for minimal parsing too
                 String gameDate = event.getString("date");
-                if (!isValidGameDate(gameDate, seasonYear, weekNumber, calculator)) {
+                if (!isValidGameDate(gameDate, seasonYear, weekNumber, seasonType, calculator)) {
                     System.out.println("Skipping invalid game in minimal parsing: Season " + seasonYear + 
                                      ", Week " + weekNumber + ", Date " + gameDate);
                     continue;
@@ -191,7 +200,8 @@ public class ApiParsers {
                 Game game = new Game();
                 game.setGameID(Long.parseLong(event.getString("id")));
                 game.setSeason(seasonYear);
-                game.setWeek(weekNumber);
+                // Store using internal week number (e.g., 19 for Wild Card, not ESPN's 1)
+                game.setWeek(internalWeek);
                 game.setDate(gameDate);
 
                 game.setStatus(status.getJSONObject("type").getString("name"));
