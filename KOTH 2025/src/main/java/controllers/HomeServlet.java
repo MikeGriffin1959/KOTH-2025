@@ -69,8 +69,16 @@ public class HomeServlet {
             List<Game> parsedGames = nflGameFetcherService.fetchCurrentWeekGames();
             sqlConnectorGameTable.updateGameTableMinimal(parsedGames);
 
-            // ✅ NEW: Refresh picks data in context AFTER game table update
-            // This ensures game statuses (STATUS_FINAL, etc.) are current before calculating results
+            // ✅ NEW: Ensure required context data is initialized before refreshing picks
+            // On first load after server start, initialPicks won't exist yet
+            if (context.getAttribute("initialPicks") == null) {
+                // Initialize prerequisites that updatePicksData depends on
+                commonProcessingService.updateSeasonAndWeek(context);
+                commonProcessingService.updateTeamData(context);
+                commonProcessingService.updateUserData(context);
+            }
+            
+            // ✅ Now refresh picks data - game statuses will be current from DB update above
             commonProcessingService.updatePicksData(context);
 
             // ✅ Process all common data, including total pot, players left, picks left
