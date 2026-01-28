@@ -65,13 +65,16 @@ public class HomeServlet {
                 session.setAttribute("derivedDataVersionSeen", appVer);
             }
 
+            // ✅ Fetch current week games & update DB FIRST
+            List<Game> parsedGames = nflGameFetcherService.fetchCurrentWeekGames();
+            sqlConnectorGameTable.updateGameTableMinimal(parsedGames);
+
+            // ✅ NEW: Refresh picks data in context AFTER game table update
+            // This ensures game statuses (STATUS_FINAL, etc.) are current before calculating results
+            commonProcessingService.updatePicksData(context);
 
             // ✅ Process all common data, including total pot, players left, picks left
             commonProcessingService.processCommonData(request, response, context);
-
-            // ✅ Fetch current week games & update DB
-            List<Game> parsedGames = nflGameFetcherService.fetchCurrentWeekGames();
-            sqlConnectorGameTable.updateGameTableMinimal(parsedGames);
 
             // ✅ Retrieve season and week from request attributes (set in processCommonData)
             String seasonStr = (String) request.getAttribute("season");
@@ -79,7 +82,7 @@ public class HomeServlet {
             int seasonInt = Integer.parseInt(seasonStr);
             int weekInt = Integer.parseInt(weekStr);
 
-            // ✅ Get all weeks picks data
+            // ✅ Get all weeks picks data (now has fresh game statuses)
             Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData =
                     sqlConnectorPicksTable.getPicksForAllWeeks(seasonInt, weekInt);
 
