@@ -35,4 +35,11 @@
 		<nature>org.eclipse.jdt.core.javanature</nature>
 		<nature>org.eclipse.wst.jsdt.core.jsNature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>src/main/webapp/KOTH Tab Icon.png</name>
+			<type>1</type>
+			<location>C:/Users/mikeg/Pictures/KOTH Tab Icon.png</location>
+		</link>
+	</linkedResources>
 </projectDescription>
