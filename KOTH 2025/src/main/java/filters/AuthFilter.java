@@ -21,8 +21,9 @@ public class AuthFilter implements Filter {
 			  "/health", 
 			  "/status",
 			  "/styles.css", 
-			  "/favicon.ico",
-			  "/KOTH-Tab-Icon.png" 
+//			  "/favicon.ico",
+			  "/KOTH-Tab-Icon.png",
+			  "/stadium.jpg" 
 			);
 
   private static boolean isPublic(HttpServletRequest req) {
