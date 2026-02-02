@@ -31,11 +31,20 @@ public class NFLGameFetcherService {
         // Get internal week number (19-22 for playoffs)
         int internalWeekNumber = currentWeek.getWeekNumber();
         
-        // Convert to ESPN week numbering for filtering API response
-        // ESPN uses weeks 1-4 for playoffs, we use weeks 19-22
-        int espnWeekNumber = (seasonType == NFLSeasonType.PLAYOFFS) 
-            ? internalWeekNumber - 18 
-            : internalWeekNumber;
+     // Convert to ESPN week numbering for filtering API response
+     // ESPN uses weeks 1,2,3,5 for playoffs (4 is Pro Bowl), we use weeks 19-22
+     int espnWeekNumber;
+     if (seasonType == NFLSeasonType.PLAYOFFS) {
+         switch (internalWeekNumber) {
+             case 19: espnWeekNumber = 1; break; // Wild Card
+             case 20: espnWeekNumber = 2; break; // Divisional
+             case 21: espnWeekNumber = 3; break; // Conference Championships
+             case 22: espnWeekNumber = 5; break; // Super Bowl (skip 4 = Pro Bowl)
+             default: espnWeekNumber = 1;
+         }
+     } else {
+         espnWeekNumber = internalWeekNumber;
+     }
 
         System.out.println("NFLGameFetcherService.fetchCurrentWeekGames: ESPN week (for filtering): " + espnWeekNumber);
         System.out.println("NFLGameFetcherService.fetchCurrentWeekGames: Internal week (for storage): " + internalWeekNumber);
