@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 
 import helpers.SqlConnectorGameTable;
+import helpers.SqlConnectorPicksPriceTable;
 import helpers.SqlConnectorPicksTable;
 import helpers.SqlConnectorUserTable;
 import services.CommonProcessingService;
@@ -42,6 +43,9 @@ public class HomeServlet {
 
     @Autowired
     private ServletUtility servletUtility; // ✅ Injected instead of static
+    
+    @Autowired
+    private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
 
     @SuppressWarnings("unchecked")
 	@GetMapping({"/", "/home", "/index", "/HomeServlet"})
@@ -109,9 +113,19 @@ public class HomeServlet {
             boolean userHasPaid = sqlConnectorUserTable.hasUserPaidForSeason(
                     (Integer) session.getAttribute("userId"), seasonInt);
 
-            // ✅ Mask Picks: pull from application scope (set by CommissionerServlet)
+         // Mask Picks: load from context, or from DB on first access
             Boolean maskPicks = (Boolean) context.getAttribute("maskPicks");
-            request.setAttribute("maskPicks", maskPicks != null ? maskPicks : false);
+            if (maskPicks == null) {
+                String seasonStr2 = (String) context.getAttribute("currentSeason");
+                if (seasonStr2 != null) {
+                    List<model.PicksPrice> pricesList = sqlConnectorPicksPriceTable.getPickPrices(Integer.parseInt(seasonStr2));
+                    maskPicks = !pricesList.isEmpty() && pricesList.get(0).isMaskPicks();
+                } else {
+                    maskPicks = false;
+                }
+                context.setAttribute("maskPicks", maskPicks);
+            }
+            request.setAttribute("maskPicks", maskPicks);
             request.setAttribute("currentUserName", (String) session.getAttribute("userName"));
 
             // ✅ Set attributes for JSP (relying on session + calculated maps)

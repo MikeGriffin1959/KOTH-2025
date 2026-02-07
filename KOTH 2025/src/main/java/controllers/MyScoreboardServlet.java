@@ -5,13 +5,11 @@ import model.Game;
 import services.NFLGameFetcherService;
 import services.ServletUtility;
 import services.CommonProcessingService;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,6 +50,9 @@ public class MyScoreboardServlet {
         this.sqlConnectorPicksTable = sqlConnectorPicksTable;
         this.nflGameFetcherService = nflGameFetcherService;
     }
+    
+    @Autowired
+    private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
     
     private boolean isLoggedIn(HttpServletRequest request) {
         HttpSession s = request.getSession(false);
@@ -161,7 +162,12 @@ public class MyScoreboardServlet {
             model.addAttribute("currentWeek", week);
             model.addAttribute("teamPickCounts", teamPickCounts);
             Boolean maskPicks = (Boolean) ctx.getAttribute("maskPicks");
-            model.addAttribute("maskPicks", maskPicks != null ? maskPicks : false);
+            if (maskPicks == null) {
+                List<model.PicksPrice> pricesList = sqlConnectorPicksPriceTable.getPickPrices(seasonInt);
+                maskPicks = !pricesList.isEmpty() && pricesList.get(0).isMaskPicks();
+                ctx.setAttribute("maskPicks", maskPicks);
+            }
+            model.addAttribute("maskPicks", maskPicks);
 
             long endTime = System.nanoTime();
             System.out.printf("MyScoreboardServlet.doGet execution time: %.1f Seconds%n",
