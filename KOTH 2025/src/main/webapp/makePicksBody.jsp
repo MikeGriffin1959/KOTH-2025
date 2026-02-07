@@ -131,6 +131,19 @@
 
             <div id="clientErrorAlert" class="alert alert-danger" style="display: none;" role="alert">
             </div>
+            
+            <c:choose>
+			    <c:when test="${maskPicks}">
+			        <div class="alert alert-info text-center" role="alert">
+			            <strong>Picks are hidden</strong> from other users until kickoff
+			        </div>
+			    </c:when>
+			    <c:otherwise>
+			        <div class="alert alert-warning text-center" role="alert">
+			            <strong>Picks are visible</strong> to all users
+			        </div>
+			    </c:otherwise>
+			</c:choose>
 
            <form id="picksForm" 
 			      action="<%= formAction %>" 

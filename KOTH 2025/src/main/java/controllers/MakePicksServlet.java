@@ -156,6 +156,8 @@ public class MakePicksServlet {
             model.addAttribute("userName", userName);
             model.addAttribute("season", season);
             model.addAttribute("currentWeek", week);
+            Boolean maskPicks = (Boolean) ctx.getAttribute("maskPicks");
+            model.addAttribute("maskPicks", maskPicks != null ? maskPicks : false);
 
             long endTime = System.nanoTime();
             System.out.printf("MakePicksServlet.doGet execution time: %.1f Seconds%n",
