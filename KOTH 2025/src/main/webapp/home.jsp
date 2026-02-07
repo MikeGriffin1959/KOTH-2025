@@ -60,6 +60,11 @@ if (userFullNames == null) userFullNames = new HashMap<>();
 Map<String, Boolean> teamResults = (Map<String, Boolean>) request.getAttribute("teamResults");
 if (teamResults == null) teamResults = new HashMap<>();
 
+// ✅ Mask Picks attributes
+Boolean maskPicks = (Boolean) request.getAttribute("maskPicks");
+if (maskPicks == null) maskPicks = false;
+String currentUserName = (String) request.getAttribute("currentUserName");
+
 %>
 
 <%!
@@ -576,18 +581,27 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                                }
                                
                                String resultClass = "";
+                               boolean gameRevealed = false;
                                if (teamResults != null && teamResults.containsKey(teamAbbr)) {
                                    resultClass = teamResults.get(teamAbbr) ? "winner" : "loser";
+                                   gameRevealed = true;
                                }
+                               
+                               // ✅ Mask Picks: show NFL shield for teams whose game hasn't kicked off
+                               boolean maskedTeam = maskPicks && !gameRevealed;
+                               String displayLogo = maskedTeam
+                                   ? "images/team-Logos/nfl-logo.svg"
+                                   : "images/team-Logos/" + teamAbbr.toLowerCase() + "-logo.svg";
+                               String displayTitle = maskedTeam ? "Pick (masked)" : teamName;
                        %>
                                <div class="team-item <%= resultClass %>">
                                    <div class="logo-container">
                                        <div class="team-logo" 
-                                            style="background-image: url('images/team-Logos/<%= teamAbbr.toLowerCase() %>-logo.svg');"
-                                            title="<%= teamName %>">
+                                            style="background-image: url('<%= displayLogo %>');"
+                                            title="<%= displayTitle %>">
                                        </div>
                                    </div>
-                                   <span><%= count %></span>
+                                   <span><%= maskedTeam ? "?" : count %></span>
                                </div>
                        <%
                            }
@@ -720,10 +734,22 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 												    Map<String, Object> pick = userPicks.get(i);
 												    String teamAbbr = teamNameToAbbrev.get(pick.get("selectedTeam"));
 												    String pickResult = (String) pick.get("result");
+												    String pickStatus = (String) pick.get("status");
+												    
+												    // ✅ Mask Picks: mask other users' picks for games that haven't kicked off
+												    boolean maskThisPick = maskPicks 
+												        && "STATUS_SCHEDULED".equals(pickStatus) 
+												        && !user.equals(currentUserName);
+												    
+												    String gridLogo = maskThisPick
+												        ? "images/team-Logos/nfl-logo.svg"
+												        : "images/team-Logos/" + teamAbbr.toLowerCase() + "-logo.svg";
+												    String gridTitle = maskThisPick ? "Pick (masked)" : (String) pick.get("selectedTeam");
+												    String gridResult = maskThisPick ? "pick-pending" : pickResult;
 												%>
-												    <div class="team-logo <%= pickResult %>" 
-												         style="background-image: url('images/team-Logos/<%= teamAbbr.toLowerCase() %>-logo.svg')"
-												         title="<%= pick.get("selectedTeam") %>">
+												    <div class="team-logo <%= gridResult %>" 
+												         style="background-image: url('<%= gridLogo %>')"
+												         title="<%= gridTitle %>">
 												    </div>
 												<%
 												}

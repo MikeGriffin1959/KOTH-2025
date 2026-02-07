@@ -23,7 +23,7 @@ public class AuthFilter implements Filter {
 			  "/styles.css", 
 //			  "/favicon.ico",
 			  "/KOTH-Tab-Icon.png",
-			  "/stadium.jpg" 
+			  "/stadium.jpeg" 
 			);
 
   private static boolean isPublic(HttpServletRequest req) {

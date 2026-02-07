@@ -76,6 +76,11 @@
         <jsp:param name="pageTitle" value="My Scoreboard" />
     </jsp:include>
     
+    <%
+ 		// Mask Picks attribute
+        Boolean maskPicks = (Boolean) request.getAttribute("maskPicks");
+        if (maskPicks == null) maskPicks = false;
+    %>
     
     <div class="main-content">
         <div class="container mt-3">
@@ -211,6 +216,9 @@
                             Integer awayPickCount = teamPickCounts != null ? teamPickCounts.get(awayTeamName) : null;
                             Integer homePickCount = teamPickCounts != null ? teamPickCounts.get(homeTeamName) : null;
                             
+                            //  Mask Picks: determine if pick counts should be hidden for this game
+                            boolean maskThisGame = maskPicks && "Scheduled".equals(game.getStatus());
+                            
                             LocalDateTime gameDateTime = LocalDateTime.parse(game.getDate(), DateTimeFormatter.ISO_DATE_TIME);
                             String formattedDate = gameDateTime.format(outputFormatter);
                             String[] dateParts = formattedDate.split(" ", 2);
@@ -231,7 +239,7 @@
                                                              class="team-logo<%= isAwaySelected ? " selected-" + awaySelectionCount : "" %>">
                                                         <%= awayTeamName %>
                                                         <% if (awayPickCount != null && awayPickCount > 0) { %>
-                                                            <span class="pick-count">(<%= awayPickCount %>)</span>
+                                                            <span class="pick-count">(<%= maskThisGame ? "?" : awayPickCount %>)</span>
                                                         <% } %>
                                                     </div>
                                                 </div>
@@ -257,7 +265,7 @@
                                                              class="team-logo<%= isHomeSelected ? " selected-" + homeSelectionCount : "" %>">
                                                         <%= homeTeamName %>
                                                         <% if (homePickCount != null && homePickCount > 0) { %>
-                                                            <span class="pick-count">(<%= homePickCount %>)</span>
+                                                            <span class="pick-count">(<%= maskThisGame ? "?" : homePickCount %>)</span>
                                                         <% } %>
                                                     </div>
                                                 </div>

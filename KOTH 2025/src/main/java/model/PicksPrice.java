@@ -12,6 +12,7 @@ public class PicksPrice {
     private BigDecimal pickPrice5;
     private boolean allowSignUp;
     private String kothSeason;
+    private boolean maskPicks;
 
     // Default constructor
     public PicksPrice() {
@@ -19,8 +20,8 @@ public class PicksPrice {
 
     // Constructor with all fields
     public PicksPrice(int picksPriceSeason, int maxPicks, BigDecimal pickPrice1, BigDecimal pickPrice2,
-		            BigDecimal pickPrice3, BigDecimal pickPrice4, BigDecimal pickPrice5,
-		            boolean allowSignUp, String kothSeason) {
+            BigDecimal pickPrice3, BigDecimal pickPrice4, BigDecimal pickPrice5,
+            boolean allowSignUp, String kothSeason, boolean maskPicks) {
 		this.picksPriceSeason = picksPriceSeason;
 		this.maxPicks = maxPicks;
 		this.pickPrice1 = pickPrice1;
@@ -30,6 +31,7 @@ public class PicksPrice {
 		this.pickPrice5 = pickPrice5;
 		this.allowSignUp = allowSignUp;
 		this.kothSeason = kothSeason;
+	    this.maskPicks = maskPicks;
 	}
 
     // Getters and setters
@@ -104,6 +106,14 @@ public class PicksPrice {
     public void setKothSeason(String kothSeason) {
         this.kothSeason = kothSeason;
     }
+    
+    public boolean isMaskPicks() {
+        return maskPicks;
+    }
+
+    public void setMaskPicks(boolean maskPicks) {
+        this.maskPicks = maskPicks;
+    }
 
     @Override
     public String toString() {
@@ -117,6 +127,7 @@ public class PicksPrice {
                 ", pickPrice5=" + pickPrice5 +
                 ", allowSignUp=" + allowSignUp +
                 ", kothSeason='" + kothSeason + '\'' +
+                ", maskPicks=" + maskPicks + 
                 '}';
     }
 }

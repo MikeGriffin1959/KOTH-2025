@@ -20,17 +20,18 @@ public class SqlConnectorPicksPriceTable {
 
     public boolean updatePickPrices(PicksPrice picksPrice) {
         System.out.println("SqlConnectorPicksPriceTable.updatePickPrices method called");
-        String sql = "INSERT INTO KOTH.PicksPrice (picksPriceSeason, maxPicks, pickPrice1, pickPrice2, pickPrice3, pickPrice4, pickPrice5, kothSeason, allowSignUp) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-                    "ON DUPLICATE KEY UPDATE " +
-                    "maxPicks = VALUES(maxPicks), " +
-                    "pickPrice1 = VALUES(pickPrice1), " +
-                    "pickPrice2 = VALUES(pickPrice2), " +
-                    "pickPrice3 = VALUES(pickPrice3), " +
-                    "pickPrice4 = VALUES(pickPrice4), " +
-                    "pickPrice5 = VALUES(pickPrice5), " +
-                    "kothSeason = VALUES(kothSeason), " +
-                    "allowSignUp = VALUES(allowSignUp)";
+        String sql = "INSERT INTO KOTH.PicksPrice (picksPriceSeason, maxPicks, pickPrice1, pickPrice2, pickPrice3, pickPrice4, pickPrice5, kothSeason, allowSignUp, maskPicks) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE " +
+                "maxPicks = VALUES(maxPicks), " +
+                "pickPrice1 = VALUES(pickPrice1), " +
+                "pickPrice2 = VALUES(pickPrice2), " +
+                "pickPrice3 = VALUES(pickPrice3), " +
+                "pickPrice4 = VALUES(pickPrice4), " +
+                "pickPrice5 = VALUES(pickPrice5), " +
+                "kothSeason = VALUES(kothSeason), " +
+                "allowSignUp = VALUES(allowSignUp), " +
+                "maskPicks = VALUES(maskPicks)";
 
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
@@ -44,6 +45,7 @@ public class SqlConnectorPicksPriceTable {
             preparedStatement.setBigDecimal(7, picksPrice.getPickPrice5());
             preparedStatement.setString(8, picksPrice.getKothSeason());
             preparedStatement.setBoolean(9, picksPrice.isAllowSignUp());
+            preparedStatement.setBoolean(10, picksPrice.isMaskPicks());
 
             System.out.println("SqlConnectorPicksPriceTable.updatePickPrices - Updating pick prices with values:");
             System.out.println("  Season: " + picksPrice.getPicksPriceSeason());
@@ -55,6 +57,7 @@ public class SqlConnectorPicksPriceTable {
             System.out.println("  Price5: " + picksPrice.getPickPrice5());
             System.out.println("  KothSeason: " + picksPrice.getKothSeason());
             System.out.println("  AllowSignUp: " + picksPrice.isAllowSignUp());
+            System.out.println("  MaskPicks: " + picksPrice.isMaskPicks());
 
             int rowsAffected = preparedStatement.executeUpdate();
             
@@ -76,8 +79,7 @@ public class SqlConnectorPicksPriceTable {
     // Method to get pick prices for a specific season
     public List<PicksPrice> getPickPrices(int season) {
         List<PicksPrice> prices = new ArrayList<>();
-        String sql = "SELECT picksPriceSeason, maxPicks, pickPrice1, pickPrice2, pickPrice3, pickPrice4, pickPrice5, AllowSignUp, KOTHSeason FROM KOTH.PicksPrice WHERE picksPriceSeason = ?";
-        
+        String sql = "SELECT picksPriceSeason, maxPicks, pickPrice1, pickPrice2, pickPrice3, pickPrice4, pickPrice5, AllowSignUp, KOTHSeason, maskPicks FROM KOTH.PicksPrice WHERE picksPriceSeason = ?";       
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
@@ -95,6 +97,7 @@ public class SqlConnectorPicksPriceTable {
                     picksPrice.setPickPrice5(resultSet.getBigDecimal("pickPrice5"));
                     picksPrice.setAllowSignUp(resultSet.getBoolean("allowSignUp"));
                     picksPrice.setKothSeason(resultSet.getString("kothSeason"));
+                    picksPrice.setMaskPicks(resultSet.getBoolean("maskPicks"));
                     prices.add(picksPrice);
                 }
             }

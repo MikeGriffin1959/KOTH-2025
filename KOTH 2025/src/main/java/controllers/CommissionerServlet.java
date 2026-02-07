@@ -138,6 +138,7 @@ public class CommissionerServlet {
             kothSeason = currentPrices.getKothSeason();
             servletContext.setAttribute("kothSeason", kothSeason);
             servletContext.setAttribute("allowSignUp", currentPrices.isAllowSignUp());
+            servletContext.setAttribute("maskPicks", currentPrices.isMaskPicks());
 
             // Format prices to 2 decimals
             formatPrices(currentPrices);
@@ -163,6 +164,7 @@ public class CommissionerServlet {
             rootNode.put("pickPrice4", getPriceAsString(currentPrices.getPickPrice4()));
             rootNode.put("pickPrice5", getPriceAsString(currentPrices.getPickPrice5()));
             rootNode.put("allowSignUp", currentPrices.isAllowSignUp());
+            rootNode.put("maskPicks", currentPrices.isMaskPicks());
             rootNode.put("kothSeason", currentPrices.getKothSeason());
 
             model.addAttribute("pickPricesJson", mapper.writeValueAsString(rootNode));
@@ -281,6 +283,10 @@ public class CommissionerServlet {
 
                 case "allowNewUsers":
                     handleAllowNewUsers(request, response);
+                    return null;
+                    
+                case "toggleMaskPicks":
+                    handleToggleMaskPicks(request, response);
                     return null;
 
                 default:
@@ -683,10 +689,12 @@ public class CommissionerServlet {
                 PicksPrice existing = existingPrices.get(0);
                 priceData.setAllowSignUp(existing.isAllowSignUp());
                 priceData.setKothSeason(existing.getKothSeason());
+                priceData.setMaskPicks(existing.isMaskPicks());
             } else {
                 // Set defaults for new records
                 priceData.setAllowSignUp(false);
                 priceData.setKothSeason("KOTH");
+                priceData.setMaskPicks(false); 
             }
             
             // Update the database
@@ -837,6 +845,7 @@ public class CommissionerServlet {
         priceData.setPickPrice4(new BigDecimal("99.99"));
         priceData.setPickPrice5(new BigDecimal("99.99"));
         priceData.setAllowSignUp(true);
+        priceData.setMaskPicks(false);
         return priceData;
     }
 
@@ -847,5 +856,43 @@ public class CommissionerServlet {
             "success", false,
             "message", "Error creating schedule: " + e.getMessage()
         )));
+    }
+    
+    private void handleToggleMaskPicks(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        if (failAjaxUnauthorizedIfNeeded(request, response, true)) return;
+        try {
+            String seasonStr = (String) request.getAttribute("season");
+            if (seasonStr == null) {
+                throw new ServletException("Current season not found in request attributes");
+            }
+
+            int season = Integer.parseInt(seasonStr);
+            boolean maskPicks = request.getParameter("maskPicks") != null;
+
+            List<PicksPrice> pricesList = sqlConnectorPicksPriceTable.getPickPrices(season);
+            if (pricesList.isEmpty()) {
+                throw new ServletException("No existing price configuration found for season " + season);
+            }
+
+            PicksPrice picksPrice = pricesList.get(0);
+            picksPrice.setMaskPicks(maskPicks);
+
+            boolean success = sqlConnectorPicksPriceTable.updatePickPrices(picksPrice);
+
+            // Update application scope immediately
+            servletContext.setAttribute("maskPicks", maskPicks);
+
+            String message = URLEncoder.encode("Mask Picks is now " +
+                (maskPicks ? "enabled" : "disabled"), "UTF-8");
+            response.sendRedirect("CommissionerServlet?success=" + success +
+                "&messageType=maskPicks&message=" + message);
+
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleToggleMaskPicks: " + e.getMessage());
+            String errorMessage = URLEncoder.encode("Error updating settings: " + e.getMessage(), "UTF-8");
+            response.sendRedirect("CommissionerServlet?success=false&messageType=maskPicks&message=" + errorMessage);
+        }
     }
 }

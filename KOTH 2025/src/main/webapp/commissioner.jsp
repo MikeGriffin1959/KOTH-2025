@@ -243,6 +243,20 @@
 			                    <button type="submit" class="btn btn-primary">Set</button>
 			                </form>
 			            </div>
+			            <div class="mt-3">
+						    <div id="maskPicksAlert" class="alert ${param.success ? 'alert-success' : 'alert-danger'}" 
+						         style="display: ${param.messageType == 'maskPicks' && not empty param.message ? 'block' : 'none'}">
+						        ${param.message}
+						    </div>
+						    <form id="maskPicksForm" action="CommissionerServlet" method="post">
+						        <input type="hidden" name="action" value="toggleMaskPicks">
+						        <div class="form-check mb-3">
+						            <input type="checkbox" class="form-check-input" id="maskPicksCheck" name="maskPicks">
+						            <label class="form-check-label" for="maskPicksCheck">Mask Picks</label>
+						        </div>
+						        <button type="submit" class="btn btn-primary">Set</button>
+						    </form>
+						</div>
 			        </div>
 			    </div>
 			</div>
@@ -435,7 +449,7 @@ let savedSeasonData = {
 
 document.addEventListener('DOMContentLoaded', function() {
     const allowSignUpCheck = document.getElementById('allowSignUpCheck');
-    
+ 	    
     // Get the allowSignUp alert element
     const allowSignUpAlert = document.getElementById('allowSignUpAlert');
     
@@ -457,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // display current season type & signup status
+ // display current season type & signup status
     try {
         const pickPricesMetaTag = document.querySelector('meta[name="pickPricesJson"]');
         if (pickPricesMetaTag) {
@@ -473,6 +487,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const allowSignUpCheck = document.getElementById('allowSignUpCheck');
             if (allowSignUpCheck && pickPricesJson.allowSignUp !== undefined) {
                 allowSignUpCheck.checked = pickPricesJson.allowSignUp;
+            }
+            
+            // Set mask picks checkbox  ← MOVE IT HERE
+            const maskPicksCheck = document.getElementById('maskPicksCheck');
+            if (maskPicksCheck && pickPricesJson.maskPicks !== undefined) {
+                maskPicksCheck.checked = pickPricesJson.maskPicks;
             }
         }
     } catch (e) {
@@ -599,6 +619,10 @@ document.addEventListener('DOMContentLoaded', function() {
 // Update pick count alert handling
 document.addEventListener('DOMContentLoaded', function() {
     const pickPricesAlert = document.getElementById('pickPricesAlert');
+    const maskPicksAlert = document.getElementById('maskPicksAlert');
+    if (maskPicksAlert && maskPicksAlert.style.display === 'block') {
+        setTimeout(() => { maskPicksAlert.style.display = 'none'; }, 5000);
+    }
     if (pickPricesAlert && pickPricesAlert.style.display === 'block') {
         setTimeout(() => {
             pickPricesAlert.style.display = 'none';

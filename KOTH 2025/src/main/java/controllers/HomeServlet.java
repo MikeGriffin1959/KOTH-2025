@@ -43,7 +43,8 @@ public class HomeServlet {
     @Autowired
     private ServletUtility servletUtility; // ✅ Injected instead of static
 
-    @GetMapping({"/", "/home", "/index", "/HomeServlet"})
+    @SuppressWarnings("unchecked")
+	@GetMapping({"/", "/home", "/index", "/HomeServlet"})
     public String doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         System.out.println("HomeServlet: doGet() started");
         long startTime = System.nanoTime();
@@ -108,6 +109,11 @@ public class HomeServlet {
             boolean userHasPaid = sqlConnectorUserTable.hasUserPaidForSeason(
                     (Integer) session.getAttribute("userId"), seasonInt);
 
+            // ✅ Mask Picks: pull from application scope (set by CommissionerServlet)
+            Boolean maskPicks = (Boolean) context.getAttribute("maskPicks");
+            request.setAttribute("maskPicks", maskPicks != null ? maskPicks : false);
+            request.setAttribute("currentUserName", (String) session.getAttribute("userName"));
+
             // ✅ Set attributes for JSP (relying on session + calculated maps)
             setRequestAttributes(request, seasonStr, weekStr, allWeeksData,
                     (Map<String, Integer>) session.getAttribute("initialPicks"),
@@ -145,7 +151,8 @@ public class HomeServlet {
         return doGet(request, response);
     }
 
-    private Map<String, String> getUserFullNames(List<String> usernames, ServletContext context) {
+    @SuppressWarnings("static-access")
+	private Map<String, String> getUserFullNames(List<String> usernames, ServletContext context) {
         Map<String, String> fullNames = new HashMap<>();
         
         // Add this debug logging

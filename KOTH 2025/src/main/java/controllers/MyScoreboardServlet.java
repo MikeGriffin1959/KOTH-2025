@@ -160,6 +160,8 @@ public class MyScoreboardServlet {
             model.addAttribute("season", season);
             model.addAttribute("currentWeek", week);
             model.addAttribute("teamPickCounts", teamPickCounts);
+            Boolean maskPicks = (Boolean) ctx.getAttribute("maskPicks");
+            model.addAttribute("maskPicks", maskPicks != null ? maskPicks : false);
 
             long endTime = System.nanoTime();
             System.out.printf("MyScoreboardServlet.doGet execution time: %.1f Seconds%n",
