@@ -1,6 +1,6 @@
 <footer class="footer mt-auto py-3">
         <div class="container">
-            <span class="text">&copy; Mike Griffin and BingmerFest Productions</span>
+            <span class="text">&copy; Ninja Sensation, LLC</span>
         </div>
     </footer>
 </body>
