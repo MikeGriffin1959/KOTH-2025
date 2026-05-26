@@ -46,6 +46,35 @@ public class HomeServlet {
     
     @Autowired
     private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
+ 
+    //Testing Only//   
+
+    @Autowired private services.EdgeOrchestrator edgeOrchestrator;
+    @Autowired private services.EdgeCandidateService edgeCandidateService;
+    
+
+
+    @org.springframework.web.bind.annotation.GetMapping("/admin/edge/run")
+    @org.springframework.web.bind.annotation.ResponseBody
+    public String runEdge(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Integer season,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Integer week) {
+
+        int s = (season != null) ? season : 2025;
+        int w = (week != null) ? week : 1;
+
+        edgeOrchestrator.runWeeklyEdge(s, w);
+
+        java.util.List<model.EdgeCandidate> ranked =
+            edgeCandidateService.buildRankedCandidates(s, w, 5,
+                services.EdgeCandidateService.Allocation.SPREAD);
+        ranked.forEach(c -> System.out.println("DEBUG[edge-rank]: " + c));
+
+        return "Edge run complete for " + s + " wk" + w +
+               " — " + ranked.size() + " candidates ranked. Check logs for DEBUG[edge-rank].";
+    }
+    
+//End Testing code //
 
     @SuppressWarnings("unchecked")
 	@GetMapping({"/", "/home", "/index", "/HomeServlet"})

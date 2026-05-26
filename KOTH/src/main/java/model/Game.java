@@ -29,6 +29,7 @@ public class Game implements Serializable {
     private boolean showScore;   
     private String displayClock; 
     private String period; 
+    private boolean neutralSite;   // ADDED for Edge: true for London/Munich/neutral-site games
 
     public Game() {
         this.userPicks = new HashMap<>();
@@ -217,6 +218,15 @@ public class Game implements Serializable {
         this.period = period;
     }
 
+    // ADDED for Edge
+    public boolean isNeutralSite() {
+        return neutralSite;
+    }
+
+    public void setNeutralSite(boolean neutralSite) {
+        this.neutralSite = neutralSite;
+    }
+
 
     @Override
     public String toString() {
@@ -235,6 +245,7 @@ public class Game implements Serializable {
                 ", awayTeamName='" + awayTeamName + '\'' +
                 ", displayClock='" + displayClock + '\'' +
                 ", period='" + period + '\'' +
+                ", neutralSite=" + neutralSite +
                 '}';
     }
 }
