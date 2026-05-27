@@ -77,8 +77,14 @@ public class ServletUtility {
         context.setAttribute("currentSeason", finalSeason);
         context.setAttribute("currentWeek", finalWeek);
 
-        // ✅ Handle PicksPrice and allowSignUp
+        // ✅ Handle PicksPrice (allowSignUp, kothSeason, maskPicks)
         handlePicksPriceAttributes(context, finalSeason);
+
+        // ✅ Mirror maskPicks into request scope so JSPs that use
+        //    request.getAttribute("maskPicks") (e.g. home.jsp) see it on
+        //    every page load, not just after a Commissioner visit.
+        Boolean maskPicksAttr = (Boolean) context.getAttribute("maskPicks");
+        request.setAttribute("maskPicks", maskPicksAttr != null ? maskPicksAttr : Boolean.FALSE);
 
         // ✅ Handle user attributes
         handleUserAttributes(request, context);
@@ -87,6 +93,10 @@ public class ServletUtility {
     /**
      * Ensures PicksPrice table is initialized for the given season.
      * If no record exists, creates a default one and enables sign-up.
+     *
+     * Reads allowSignUp, kothSeason, and maskPicks from the PicksPrice row
+     * and writes them all to ServletContext so every page that calls
+     * setCommonAttributes() picks them up — not just CommissionerServlet.
      */
     private void handlePicksPriceAttributes(ServletContext context, String season) {
         System.out.println("ServletUtility.handlePicksPriceAttributes started");
@@ -109,28 +119,35 @@ public class ServletUtility {
                     defaultPrice.setPickPrice4(BigDecimal.valueOf(0));
                     defaultPrice.setPickPrice5(BigDecimal.valueOf(0));
                     defaultPrice.setAllowSignUp(true); // ✅ Enable sign-up by default
+                    defaultPrice.setMaskPicks(false);  // ✅ Default mask state
 
                     boolean success = sqlConnectorPicksPriceTable.updatePickPrices(defaultPrice);
                     System.out.println("Default PicksPrice created for season " + seasonInt + ": " + success);
 
                     context.setAttribute("allowSignUp", true);
                     context.setAttribute("kothSeason", defaultPrice.getKothSeason());
+                    context.setAttribute("maskPicks", false);
                 } else {
                     // Use existing record
                     PicksPrice picksPrice = pricesList.get(0);
                     boolean allowSignUp = picksPrice.isAllowSignUp();
+                    boolean maskPicks  = picksPrice.isMaskPicks();
                     context.setAttribute("allowSignUp", allowSignUp);
                     context.setAttribute("kothSeason", picksPrice.getKothSeason());
-                    System.out.println("Found PicksPrice record. allowSignUp = " + allowSignUp);
+                    context.setAttribute("maskPicks", maskPicks);
+                    System.out.println("Found PicksPrice record. allowSignUp = " + allowSignUp
+                            + ", maskPicks = " + maskPicks);
                 }
             } else {
-                System.out.println("sqlConnectorPicksPriceTable is null. Setting allowSignUp to false.");
+                System.out.println("sqlConnectorPicksPriceTable is null. Setting allowSignUp and maskPicks to false.");
                 context.setAttribute("allowSignUp", false);
+                context.setAttribute("maskPicks", false);
             }
         } catch (Exception e) {
             System.err.println("ServletUtility: Error handling PicksPrice: " + e.getMessage());
             e.printStackTrace();
             context.setAttribute("allowSignUp", false);
+            context.setAttribute("maskPicks", false);
         }
     }
 
