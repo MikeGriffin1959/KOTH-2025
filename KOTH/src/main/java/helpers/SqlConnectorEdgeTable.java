@@ -276,4 +276,28 @@ public class SqlConnectorEdgeTable {
         double v = rs.getDouble(col);
         return rs.wasNull() ? null : v;
     }
+
+    /**
+     * Returns the most-recent updatedAt for this week's EdgeSnapshot rows,
+     * or null if no snapshots exist yet. Used by the controller to decide
+     * whether to auto-rebuild on page load.
+     *
+     * Requires: ALTER TABLE KOTH.EdgeSnapshot
+     *   ADD COLUMN updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+     */
+    public java.sql.Timestamp getNewestSnapshotAt(int season, int internalWeek) {
+        String sql = "SELECT MAX(updatedAt) AS newest FROM KOTH.EdgeSnapshot " +
+                     "WHERE season=? AND internalWeek=?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, internalWeek);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getTimestamp("newest");
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorEdgeTable.getNewestSnapshotAt error: " + e.getMessage());
+        }
+        return null;
+    }
 }

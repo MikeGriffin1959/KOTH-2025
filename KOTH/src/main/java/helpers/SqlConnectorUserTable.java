@@ -80,12 +80,15 @@ public class SqlConnectorUserTable {
     }
 
     // Method to check user's role(s) (Login Servlet)
+    // FIX: now reads BOTH commish and admin from KOTH.User; callers
+    // (LoginServlet doGet/doPost) already pull "isAdmin" from this map.
     public Map<String, Boolean> getUserRoles(String userName) {
         System.out.println("SqlConnectorUserTable.getUserRoles method started");
         Map<String, Boolean> roles = new HashMap<>();
         roles.put("isCommish", false);
+        roles.put("isAdmin",   false);
 
-        String sql = "SELECT commish FROM KOTH.User WHERE userName = ?";
+        String sql = "SELECT commish, admin FROM KOTH.User WHERE userName = ?";
 
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
@@ -95,13 +98,16 @@ public class SqlConnectorUserTable {
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 if (resultSet.next()) {
                     roles.put("isCommish", resultSet.getBoolean("commish"));
+                    roles.put("isAdmin",   resultSet.getBoolean("admin"));
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
-        System.out.println("  getUserRoles for " + userName + ", Commish=" + roles.get("isCommish"));
+        System.out.println("  getUserRoles for " + userName +
+                ", Commish=" + roles.get("isCommish") +
+                ", Admin="   + roles.get("isAdmin"));
         return roles;
     }
 

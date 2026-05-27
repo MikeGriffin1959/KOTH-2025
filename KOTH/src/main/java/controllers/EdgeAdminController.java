@@ -36,6 +36,11 @@ public class EdgeAdminController {
     @Autowired private NFLSeasonCalculator seasonCalculator;
     @Autowired private helpers.SqlConnectorPicksTable picksTable;
     @Autowired private helpers.SqlConnectorGameTable gameTable;
+    @Autowired private helpers.SqlConnectorEdgeTable edgeTable;
+    @Autowired private services.EdgeOrchestrator edgeOrchestrator;
+
+    /** Snapshots older than this many minutes trigger an auto-rebuild on page load. */
+    private static final int STALE_AFTER_MIN = 30;
 
     @GetMapping("/admin/edge")
     public String viewEdge(HttpServletRequest request, Model model,
@@ -43,20 +48,41 @@ public class EdgeAdminController {
                            @RequestParam(required = false) Integer week,
                            @RequestParam(required = false) Integer lives,
                            @RequestParam(required = false) String alloc,
-                           @RequestParam(required = false, defaultValue = "false") boolean triage) {
+                           @RequestParam(required = false, defaultValue = "false") boolean triage,
+                           @RequestParam(required = false, defaultValue = "false") boolean refresh) {
 
-        // ── commish gate (same pattern as the commissioner pages) ──
+        // ── admin gate — Edge advisor is restricted to admin users ──
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("userName") == null) {
             return "redirect:/LoginServlet";
         }
-        Boolean isCommish = (Boolean) session.getAttribute("isCommish");
-        if (!Boolean.TRUE.equals(isCommish)) {
+        Boolean isAdmin = (Boolean) session.getAttribute("isAdmin");
+        if (!Boolean.TRUE.equals(isAdmin)) {
             return "redirect:/HomeServlet";
         }
 
         int s = (season != null) ? season : seasonCalculator.getCurrentNFLSeason();
         int w = (week   != null) ? week   : seasonCalculator.getCurrentNFLWeekNumber();
+
+        // ── auto-build snapshots if missing or stale ──
+        // Stale = older than STALE_AFTER_MIN, so a near-kickoff refresh pulls fresh lines.
+        // Manual refresh (?refresh=true) always rebuilds.
+        java.sql.Timestamp newest = edgeTable.getNewestSnapshotAt(s, w);
+        boolean needsBuild = refresh || newest == null ||
+                (System.currentTimeMillis() - newest.getTime()) > STALE_AFTER_MIN * 60_000L;
+        if (needsBuild) {
+            String why = refresh ? "manual refresh"
+                       : newest == null ? "no snapshots"
+                       : "stale (" + ((System.currentTimeMillis() - newest.getTime()) / 60_000L) + "min old)";
+            System.out.println("DEBUG[edge]: auto-build triggered — " + why);
+            try {
+                edgeOrchestrator.runWeeklyEdge(s, w);
+                newest = edgeTable.getNewestSnapshotAt(s, w);
+            } catch (Exception e) {
+                System.err.println("DEBUG[edge]: auto-build failed: " + e.getMessage());
+                model.addAttribute("buildError", "Auto-build failed: " + e.getMessage());
+            }
+        }
 
         // remaining lives: default to the commish's own remaining picks for this week,
         // overridable via the ?lives= param. Pull from the same context map the app uses.
@@ -84,6 +110,7 @@ public class EdgeAdminController {
         model.addAttribute("alloc", allocation.name());
         model.addAttribute("triage", triage);
         model.addAttribute("userName", session.getAttribute("userName"));
+        model.addAttribute("lastBuiltAt", newest == null ? null : new java.util.Date(newest.getTime()));
         // pass through any apply banner from a recent redirect
         model.addAttribute("applyMessage", request.getParameter("applyMessage"));
         model.addAttribute("applyError", request.getParameter("applyError"));
@@ -126,8 +153,8 @@ public class EdgeAdminController {
         if (session == null || session.getAttribute("userName") == null) {
             return "redirect:/LoginServlet";
         }
-        Boolean isCommish = (Boolean) session.getAttribute("isCommish");
-        if (!Boolean.TRUE.equals(isCommish)) {
+        Boolean isAdmin = (Boolean) session.getAttribute("isAdmin");
+        if (!Boolean.TRUE.equals(isAdmin)) {
             return "redirect:/HomeServlet";
         }
 

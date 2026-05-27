@@ -214,6 +214,14 @@
                         </a>
                     </li>
                 </c:if>
+                <c:if test="${not empty sessionScope.isAdmin and sessionScope.isAdmin eq true}">
+				    <li class="nav-item">
+				        <a class="nav-link" href="admin/edge">
+				            <i class="fas fa-brain"></i>
+				            <span class="page-name">Edge</span>
+				        </a>
+				    </li>
+				</c:if>
             </ul>
         </div>
     </div>
