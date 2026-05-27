@@ -216,7 +216,7 @@
                 </c:if>
                 <c:if test="${not empty sessionScope.isAdmin and sessionScope.isAdmin eq true}">
 				    <li class="nav-item">
-				        <a class="nav-link" href="admin/edge">
+				        <a class="nav-link" href="edge">
 				            <i class="fas fa-brain"></i>
 				            <span class="page-name">Edge</span>
 				        </a>

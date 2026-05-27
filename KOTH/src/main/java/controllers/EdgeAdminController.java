@@ -42,7 +42,7 @@ public class EdgeAdminController {
     /** Snapshots older than this many minutes trigger an auto-rebuild on page load. */
     private static final int STALE_AFTER_MIN = 30;
 
-    @GetMapping("/admin/edge")
+    @GetMapping("/edge")
     public String viewEdge(HttpServletRequest request, Model model,
                            @RequestParam(required = false) Integer season,
                            @RequestParam(required = false) Integer week,
@@ -142,7 +142,7 @@ public class EdgeAdminController {
      * method MakePicks uses — which DELETE-then-INSERTs the entire week. The UI
      * warns about that overwrite explicitly before submission.
      */
-    @PostMapping("/admin/edge/apply")
+    @PostMapping("/edge/apply")
     public String applyPicks(HttpServletRequest request,
                              @RequestParam Integer season,
                              @RequestParam Integer week,
@@ -311,7 +311,7 @@ public class EdgeAdminController {
     }
 
     private String redirectBack(int season, int week, String message, String error) {
-        StringBuilder sb = new StringBuilder("redirect:/admin/edge?season=")
+        StringBuilder sb = new StringBuilder("redirect:/edge?season=")
                 .append(season).append("&week=").append(week).append("&triage=true");
         if (message != null) sb.append("&applyMessage=").append(urlEnc(message));
         if (error != null)   sb.append("&applyError=").append(urlEnc(error));
