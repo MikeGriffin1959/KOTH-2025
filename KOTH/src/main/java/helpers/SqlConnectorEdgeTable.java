@@ -252,9 +252,12 @@ public class SqlConnectorEdgeTable {
                     p.setDouble(4, cand.getBlendedProb() == null ? 0.0 : cand.getBlendedProb());
                     p.setDouble(5, cand.getSafetyScore());
                     p.setInt(6, rank++);
-                    p.setNull(7, java.sql.Types.VARCHAR);   // upsetRisk (Claude — M3)
-                    p.setNull(8, java.sql.Types.DECIMAL);   // claudeConf
-                    p.setNull(9, java.sql.Types.VARCHAR);   // claudeRationale
+                    if (cand.getClaudeUpsetRisk() != null) p.setString(7, cand.getClaudeUpsetRisk());
+                    else p.setNull(7, java.sql.Types.VARCHAR);
+                    if (cand.getClaudeConfidence() != null) p.setDouble(8, cand.getClaudeConfidence());
+                    else p.setNull(8, java.sql.Types.DECIMAL);
+                    if (cand.getClaudeRationale() != null) p.setString(9, cand.getClaudeRationale());
+                    else p.setNull(9, java.sql.Types.VARCHAR);
                     p.setString(10, "auto");
                     p.addBatch();
                 }

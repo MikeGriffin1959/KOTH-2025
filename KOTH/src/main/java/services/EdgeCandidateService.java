@@ -13,6 +13,7 @@ import model.EdgeCandidate;
 import model.Game;
 import model.GameEdge;
 import model.TeamContext;
+import model.TriageResult;
 import services.UpsetDetectionService.UpsetResult;
 
 /**
@@ -33,6 +34,7 @@ public class EdgeCandidateService {
     @Autowired private SqlConnectorEdgeTable edgeTable;
     @Autowired private SqlConnectorGameTable gameTable;
     @Autowired private UpsetDetectionService upsetService;
+    @Autowired private KothTriageClient triageClient;
 
     /**
      * Build the ranked candidate list for a week and allocate the given number of lives.
@@ -64,6 +66,39 @@ public class EdgeCandidateService {
     /** Persist the ranked list as this week's recommendations. */
     public void persistRecommendations(int season, int internalWeek, List<EdgeCandidate> ranked) {
         edgeTable.replaceRecommendations(season, internalWeek, ranked);
+    }
+
+    /** True if the Claude triage client has an API key configured. */
+    public boolean isTriageConfigured() {
+        return triageClient.isConfigured();
+    }
+
+    /**
+     * Run Claude Haiku triage over the ranked list and merge verdicts back onto the
+     * matching candidates by teamId. No-op (leaves candidates untouched) if triage
+     * is unconfigured or returns nothing. Returns the (possibly enriched) list.
+     */
+    public List<EdgeCandidate> applyTriage(List<EdgeCandidate> ranked, int season, int internalWeek) {
+        if (ranked == null || ranked.isEmpty()) return ranked;
+        if (!triageClient.isConfigured()) return ranked;
+
+        List<TriageResult> results = triageClient.triage(ranked, season, internalWeek);
+        if (results.isEmpty()) return ranked;
+
+        Map<Integer, TriageResult> byTeam = new HashMap<>();
+        for (TriageResult t : results) {
+            if (t.getTeamId() != 0) byTeam.put(t.getTeamId(), t);
+        }
+        for (EdgeCandidate c : ranked) {
+            TriageResult t = byTeam.get(c.getTeamId());
+            if (t != null) {
+                c.setClaudeConfidence(t.getConfidence());
+                c.setClaudeUpsetRisk(t.getUpsetRisk());
+                c.setClaudeRationale(t.getRationale());
+                c.setClaudeRecommend(t.isRecommend());
+            }
+        }
+        return ranked;
     }
 
     // ── internals ─────────────────────────────────────────────

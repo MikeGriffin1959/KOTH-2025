@@ -37,6 +37,12 @@ public class EdgeCandidate implements Serializable {
     private int allocatedLives;         // set by the allocator (Spread/Stack)
     private boolean recommended;        // top of the safe list / chosen by allocator
 
+    // ── Claude triage (M3) ──
+    private Double claudeConfidence;    // 0..1, or null if triage not run
+    private String claudeUpsetRisk;     // low | med | high
+    private String claudeRationale;     // one-line explanation
+    private Boolean claudeRecommend;    // Claude's own thumbs up/down
+
     public EdgeCandidate() {}
 
     public void addFlag(String flag) { this.upsetFlags.add(flag); }
@@ -92,6 +98,20 @@ public class EdgeCandidate implements Serializable {
 
     public boolean isRecommended() { return recommended; }
     public void setRecommended(boolean v) { this.recommended = v; }
+
+    public Double getClaudeConfidence() { return claudeConfidence; }
+    public void setClaudeConfidence(Double v) { this.claudeConfidence = v; }
+
+    public String getClaudeUpsetRisk() { return claudeUpsetRisk; }
+    public void setClaudeUpsetRisk(String v) { this.claudeUpsetRisk = v; }
+
+    public String getClaudeRationale() { return claudeRationale; }
+    public void setClaudeRationale(String v) { this.claudeRationale = v; }
+
+    public Boolean getClaudeRecommend() { return claudeRecommend; }
+    public void setClaudeRecommend(Boolean v) { this.claudeRecommend = v; }
+
+    public boolean hasClaude() { return claudeConfidence != null || claudeRationale != null; }
 
     // convenience for the JSP
     public boolean hasFlags() { return upsetFlags != null && !upsetFlags.isEmpty(); }
