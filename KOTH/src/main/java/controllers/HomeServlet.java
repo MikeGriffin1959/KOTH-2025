@@ -15,6 +15,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 
+import helpers.SqlConnectorCommentaryTable;
 import helpers.SqlConnectorGameTable;
 import helpers.SqlConnectorPicksPriceTable;
 import helpers.SqlConnectorPicksTable;
@@ -46,7 +47,10 @@ public class HomeServlet {
     
     @Autowired
     private SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
- 
+
+    @Autowired
+    private SqlConnectorCommentaryTable sqlConnectorCommentaryTable;
+
     //Testing Only//   
 
     @Autowired private services.EdgeOrchestrator edgeOrchestrator;
@@ -124,6 +128,19 @@ public class HomeServlet {
             int seasonInt = Integer.parseInt(seasonStr);
             int weekInt = Integer.parseInt(weekStr);
 
+            // Commentary blurb for the Home teaser (never let it break the page).
+            try {
+                List<model.PicksPrice> commentaryPrices = sqlConnectorPicksPriceTable.getPickPrices(seasonInt);
+                boolean commentaryEnabled = !commentaryPrices.isEmpty() && commentaryPrices.get(0).isCommentaryEnabled();
+                request.setAttribute("commentaryEnabled", commentaryEnabled);
+                request.setAttribute("latestCommentary",
+                        commentaryEnabled ? sqlConnectorCommentaryTable.getLatestForSeason(seasonInt) : null);
+            } catch (Exception ce) {
+                System.err.println("HomeServlet: commentary blurb load failed (non-fatal): " + ce.getMessage());
+                request.setAttribute("commentaryEnabled", false);
+                request.setAttribute("latestCommentary", null);
+            }
+
             // ✅ Get all weeks picks data (now has fresh game statuses)
             Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData =
                     sqlConnectorPicksTable.getPicksForAllWeeks(seasonInt, weekInt);
@@ -142,16 +159,15 @@ public class HomeServlet {
             boolean userHasPaid = sqlConnectorUserTable.hasUserPaidForSeason(
                     (Integer) session.getAttribute("userId"), seasonInt);
 
-         // Mask Picks: load from context, or from DB on first access
+         // Mask Picks: load from context, or from DB on first access.
             Boolean maskPicks = (Boolean) context.getAttribute("maskPicks");
             if (maskPicks == null) {
-                String seasonStr2 = (String) context.getAttribute("currentSeason");
-                if (seasonStr2 != null) {
-                    List<model.PicksPrice> pricesList = sqlConnectorPicksPriceTable.getPickPrices(Integer.parseInt(seasonStr2));
-                    maskPicks = !pricesList.isEmpty() && pricesList.get(0).isMaskPicks();
-                } else {
-                    maskPicks = false;
-                }
+                // Resolve from THIS request's season (set by processCommonData above),
+                // not the app-scoped "currentSeason" — on a fresh server start that
+                // app attribute isn't populated on the first Home load, which left
+                // Week-1 picks unmasked until a second visit cached the value.
+                List<model.PicksPrice> pricesList = sqlConnectorPicksPriceTable.getPickPrices(seasonInt);
+                maskPicks = !pricesList.isEmpty() && pricesList.get(0).isMaskPicks();
                 context.setAttribute("maskPicks", maskPicks);
             }
             request.setAttribute("maskPicks", maskPicks);

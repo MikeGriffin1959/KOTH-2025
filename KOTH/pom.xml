@@ -93,7 +93,7 @@
   </dependencies>
 
   <build>
-    <finalName>KOTH-2025</finalName>
+    <finalName>KOTH</finalName>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>

@@ -34,3 +34,10 @@ build/
 
 # Backup files
 *~
+
+# Secrets — never commit a repo-local secrets file (real key lives in
+# C:\KOTH-secrets\secrets.properties, outside the repo)
+secrets.properties
+
+# AWS deploy secrets/bundles (DB creds, EB options, deployment zips)
+.secrets/

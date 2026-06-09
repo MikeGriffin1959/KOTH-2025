@@ -557,6 +557,9 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
            </div>
        </div>
                  
+       <!-- AI Commentary teaser -->
+       <jsp:include page="commentaryBlurb.jsp" />
+
        <!-- This Week's Picks Section -->
        <div class="col-md-4">
            <div class="teams-card card">

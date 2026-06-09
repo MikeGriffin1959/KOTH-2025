@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import helpers.*;
+import services.CommentaryService;
 import services.CommonProcessingService;
 import services.ServletUtility;
 
@@ -39,6 +40,9 @@ public class CommissionerServlet {
     
     @Autowired
     private ServletUtility servletUtility; // ✅ Injected instead of static
+
+    @Autowired
+    private CommentaryService commentaryService; // Commentary feature (M1)
 
     @Autowired
     public CommissionerServlet(SqlConnectorUserTable sqlConnectorUserTable,
@@ -166,6 +170,11 @@ public class CommissionerServlet {
             rootNode.put("allowSignUp", currentPrices.isAllowSignUp());
             rootNode.put("maskPicks", currentPrices.isMaskPicks());
             rootNode.put("kothSeason", currentPrices.getKothSeason());
+            // Commentary settings (M1) — carried to the JSP the same way maskPicks is
+            rootNode.put("snarkLevel", currentPrices.getSnarkLevel());
+            rootNode.put("commentaryEnabled", currentPrices.isCommentaryEnabled());
+            rootNode.put("commentaryNotifications", currentPrices.isCommentaryNotifications());
+            rootNode.put("previewDayOfWeek", currentPrices.getPreviewDayOfWeek());
 
             model.addAttribute("pickPricesJson", mapper.writeValueAsString(rootNode));
         } catch (Exception e) {
@@ -287,6 +296,26 @@ public class CommissionerServlet {
                     
                 case "toggleMaskPicks":
                     handleToggleMaskPicks(request, response);
+                    return null;
+
+                case "toggleCommentary":
+                    handleToggleCommentary(request, response);
+                    return null;
+
+                case "setSnarkLevel":
+                    handleSetSnarkLevel(request, response);
+                    return null;
+
+                case "toggleCommentaryNotifications":
+                    handleToggleCommentaryNotifications(request, response);
+                    return null;
+
+                case "setPreviewDayOfWeek":
+                    handleSetPreviewDayOfWeek(request, response);
+                    return null;
+
+                case "testCommentary":
+                    handleTestCommentary(request, response);
                     return null;
 
                 default:
@@ -690,6 +719,11 @@ public class CommissionerServlet {
                 priceData.setAllowSignUp(existing.isAllowSignUp());
                 priceData.setKothSeason(existing.getKothSeason());
                 priceData.setMaskPicks(existing.isMaskPicks());
+                // Preserve commentary settings so a price update doesn't reset them
+                priceData.setSnarkLevel(existing.getSnarkLevel());
+                priceData.setCommentaryEnabled(existing.isCommentaryEnabled());
+                priceData.setCommentaryNotifications(existing.isCommentaryNotifications());
+                priceData.setPreviewDayOfWeek(existing.getPreviewDayOfWeek());
             } else {
                 // Set defaults for new records
                 priceData.setAllowSignUp(false);
@@ -893,6 +927,125 @@ public class CommissionerServlet {
             System.err.println("CommissionerServlet: Error in handleToggleMaskPicks: " + e.getMessage());
             String errorMessage = URLEncoder.encode("Error updating settings: " + e.getMessage(), "UTF-8");
             response.sendRedirect("CommissionerServlet?success=false&messageType=maskPicks&message=" + errorMessage);
+        }
+    }
+
+    // ── Commentary settings (M1) ──────────────────────────────────────────
+    // AJAX/JSON handlers (mirroring handleSetSeasonWeek's {success,message} shape)
+    // so the Commentary card can instant-save and show the test blurb inline.
+
+    /** Load the current season's PicksPrice, or write an error JSON and return null. */
+    private PicksPrice loadCurrentPricesOrWriteError(int season, HttpServletResponse response) throws IOException {
+        List<PicksPrice> prices = sqlConnectorPicksPriceTable.getPickPrices(season);
+        if (prices.isEmpty()) {
+            writeJsonResponse(response, false, "No price configuration found for season " + season);
+            return null;
+        }
+        return prices.get(0);
+    }
+
+    /** Resolve the current week from the request-scoped attribute (or the 'week' param). */
+    private int resolveWeek(HttpServletRequest request) {
+        Object attr = request.getAttribute("week");
+        if (attr != null) {
+            try { return Integer.parseInt(attr.toString()); } catch (NumberFormatException ignore) {}
+        }
+        String param = request.getParameter("week");
+        if (param != null && !param.isEmpty()) {
+            try { return Integer.parseInt(param); } catch (NumberFormatException ignore) {}
+        }
+        return 0;
+    }
+
+    private void handleToggleCommentary(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            int season = Integer.parseInt((String) request.getAttribute("season"));
+            boolean enabled = Boolean.parseBoolean(request.getParameter("commentaryEnabled"));
+            PicksPrice cfg = loadCurrentPricesOrWriteError(season, response);
+            if (cfg == null) return;
+            cfg.setCommentaryEnabled(enabled);
+            boolean ok = sqlConnectorPicksPriceTable.updatePickPrices(cfg);
+            writeJsonResponse(response, ok, "Commentary " + (enabled ? "enabled" : "disabled"));
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleToggleCommentary: " + e.getMessage());
+            writeJsonResponse(response, false, "Error updating commentary setting");
+        }
+    }
+
+    private void handleSetSnarkLevel(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            int season = Integer.parseInt((String) request.getAttribute("season"));
+            int snarkLevel = Integer.parseInt(request.getParameter("snarkLevel"));
+            if (snarkLevel < 0) snarkLevel = 0;
+            if (snarkLevel > 10) snarkLevel = 10;
+            PicksPrice cfg = loadCurrentPricesOrWriteError(season, response);
+            if (cfg == null) return;
+            cfg.setSnarkLevel(snarkLevel);
+            boolean ok = sqlConnectorPicksPriceTable.updatePickPrices(cfg);
+            writeJsonResponse(response, ok, "Snark level set to " + snarkLevel);
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleSetSnarkLevel: " + e.getMessage());
+            writeJsonResponse(response, false, "Error updating snark level");
+        }
+    }
+
+    private void handleToggleCommentaryNotifications(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            int season = Integer.parseInt((String) request.getAttribute("season"));
+            boolean enabled = Boolean.parseBoolean(request.getParameter("commentaryNotifications"));
+            PicksPrice cfg = loadCurrentPricesOrWriteError(season, response);
+            if (cfg == null) return;
+            cfg.setCommentaryNotifications(enabled);
+            boolean ok = sqlConnectorPicksPriceTable.updatePickPrices(cfg);
+            writeJsonResponse(response, ok, "Notifications " + (enabled ? "enabled" : "disabled"));
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleToggleCommentaryNotifications: " + e.getMessage());
+            writeJsonResponse(response, false, "Error updating notifications setting");
+        }
+    }
+
+    private void handleSetPreviewDayOfWeek(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            int season = Integer.parseInt((String) request.getAttribute("season"));
+            int day = Integer.parseInt(request.getParameter("previewDayOfWeek"));
+            if (day < 1 || day > 7) {
+                writeJsonResponse(response, false, "Preview day must be 1-7 (Mon-Sun)");
+                return;
+            }
+            PicksPrice cfg = loadCurrentPricesOrWriteError(season, response);
+            if (cfg == null) return;
+            cfg.setPreviewDayOfWeek(day);
+            boolean ok = sqlConnectorPicksPriceTable.updatePickPrices(cfg);
+            writeJsonResponse(response, ok, "Preview day saved");
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleSetPreviewDayOfWeek: " + e.getMessage());
+            writeJsonResponse(response, false, "Error updating preview day");
+        }
+    }
+
+    /** Fire the admin test blurb. Uses ObjectMapper to safely escape the generated body. */
+    private void handleTestCommentary(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            int season = Integer.parseInt((String) request.getAttribute("season"));
+            int week = resolveWeek(request);
+            CommentaryService.TestResult result = commentaryService.generateTestCommentary(season, week);
+
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode node = mapper.createObjectNode();
+            node.put("success", result.success);
+            node.put("message", result.message);
+            if (result.body != null) node.put("body", result.body);
+            if (result.commentaryId != null) node.put("commentaryId", result.commentaryId);
+            response.getWriter().write(mapper.writeValueAsString(node));
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleTestCommentary: " + e.getMessage());
+            e.printStackTrace();
+            writeJsonResponse(response, false, "Error firing test commentary: " + e.getMessage());
         }
     }
 }

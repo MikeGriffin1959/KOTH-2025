@@ -206,6 +206,12 @@
                         <span class="page-name">My Scoreboard</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="CommentaryServlet">
+                        <i class="fa-solid fa-tower-broadcast"></i>
+                        <span class="page-name">Commentary</span>
+                    </a>
+                </li>
                 <c:if test="${not empty sessionScope.isCommish and sessionScope.isCommish eq true}">
                     <li class="nav-item">
                         <a class="nav-link" href="CommissionerServlet">

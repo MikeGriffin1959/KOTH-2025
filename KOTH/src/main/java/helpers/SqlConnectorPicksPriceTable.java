@@ -20,8 +20,8 @@ public class SqlConnectorPicksPriceTable {
 
     public boolean updatePickPrices(PicksPrice picksPrice) {
         System.out.println("SqlConnectorPicksPriceTable.updatePickPrices method called");
-        String sql = "INSERT INTO KOTH.PicksPrice (picksPriceSeason, maxPicks, pickPrice1, pickPrice2, pickPrice3, pickPrice4, pickPrice5, kothSeason, allowSignUp, maskPicks) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        String sql = "INSERT INTO KOTH.PicksPrice (picksPriceSeason, maxPicks, pickPrice1, pickPrice2, pickPrice3, pickPrice4, pickPrice5, kothSeason, allowSignUp, maskPicks, snarkLevel, commentaryEnabled, commentaryNotifications, previewDayOfWeek) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                 "ON DUPLICATE KEY UPDATE " +
                 "maxPicks = VALUES(maxPicks), " +
                 "pickPrice1 = VALUES(pickPrice1), " +
@@ -31,7 +31,11 @@ public class SqlConnectorPicksPriceTable {
                 "pickPrice5 = VALUES(pickPrice5), " +
                 "kothSeason = VALUES(kothSeason), " +
                 "allowSignUp = VALUES(allowSignUp), " +
-                "maskPicks = VALUES(maskPicks)";
+                "maskPicks = VALUES(maskPicks), " +
+                "snarkLevel = VALUES(snarkLevel), " +
+                "commentaryEnabled = VALUES(commentaryEnabled), " +
+                "commentaryNotifications = VALUES(commentaryNotifications), " +
+                "previewDayOfWeek = VALUES(previewDayOfWeek)";
 
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
@@ -46,6 +50,10 @@ public class SqlConnectorPicksPriceTable {
             preparedStatement.setString(8, picksPrice.getKothSeason());
             preparedStatement.setBoolean(9, picksPrice.isAllowSignUp());
             preparedStatement.setBoolean(10, picksPrice.isMaskPicks());
+            preparedStatement.setInt(11, picksPrice.getSnarkLevel());
+            preparedStatement.setBoolean(12, picksPrice.isCommentaryEnabled());
+            preparedStatement.setBoolean(13, picksPrice.isCommentaryNotifications());
+            preparedStatement.setInt(14, picksPrice.getPreviewDayOfWeek());
 
             System.out.println("SqlConnectorPicksPriceTable.updatePickPrices - Updating pick prices with values:");
             System.out.println("  Season: " + picksPrice.getPicksPriceSeason());
@@ -79,7 +87,7 @@ public class SqlConnectorPicksPriceTable {
     // Method to get pick prices for a specific season
     public List<PicksPrice> getPickPrices(int season) {
         List<PicksPrice> prices = new ArrayList<>();
-        String sql = "SELECT picksPriceSeason, maxPicks, pickPrice1, pickPrice2, pickPrice3, pickPrice4, pickPrice5, AllowSignUp, KOTHSeason, maskPicks FROM KOTH.PicksPrice WHERE picksPriceSeason = ?";       
+        String sql = "SELECT picksPriceSeason, maxPicks, pickPrice1, pickPrice2, pickPrice3, pickPrice4, pickPrice5, AllowSignUp, KOTHSeason, maskPicks, snarkLevel, commentaryEnabled, commentaryNotifications, previewDayOfWeek FROM KOTH.PicksPrice WHERE picksPriceSeason = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
@@ -98,6 +106,10 @@ public class SqlConnectorPicksPriceTable {
                     picksPrice.setAllowSignUp(resultSet.getBoolean("allowSignUp"));
                     picksPrice.setKothSeason(resultSet.getString("kothSeason"));
                     picksPrice.setMaskPicks(resultSet.getBoolean("maskPicks"));
+                    picksPrice.setSnarkLevel(resultSet.getInt("snarkLevel"));
+                    picksPrice.setCommentaryEnabled(resultSet.getBoolean("commentaryEnabled"));
+                    picksPrice.setCommentaryNotifications(resultSet.getBoolean("commentaryNotifications"));
+                    picksPrice.setPreviewDayOfWeek(resultSet.getInt("previewDayOfWeek"));
                     prices.add(picksPrice);
                 }
             }

@@ -13,6 +13,13 @@ public class PicksPrice {
     private boolean allowSignUp;
     private String kothSeason;
     private boolean maskPicks;
+    // Commentary settings (M1) — live here alongside maskPicks/allowSignUp.
+    // Defaults match the picksprice column defaults (snark 5, preview day 5=Friday)
+    // so a fresh PicksPrice (new season / price update) doesn't reset them to 0.
+    private int snarkLevel = 5;
+    private boolean commentaryEnabled = false;
+    private boolean commentaryNotifications = false;
+    private int previewDayOfWeek = 5;
 
     // Default constructor
     public PicksPrice() {
@@ -115,6 +122,38 @@ public class PicksPrice {
         this.maskPicks = maskPicks;
     }
 
+    public int getSnarkLevel() {
+        return snarkLevel;
+    }
+
+    public void setSnarkLevel(int snarkLevel) {
+        this.snarkLevel = snarkLevel;
+    }
+
+    public boolean isCommentaryEnabled() {
+        return commentaryEnabled;
+    }
+
+    public void setCommentaryEnabled(boolean commentaryEnabled) {
+        this.commentaryEnabled = commentaryEnabled;
+    }
+
+    public boolean isCommentaryNotifications() {
+        return commentaryNotifications;
+    }
+
+    public void setCommentaryNotifications(boolean commentaryNotifications) {
+        this.commentaryNotifications = commentaryNotifications;
+    }
+
+    public int getPreviewDayOfWeek() {
+        return previewDayOfWeek;
+    }
+
+    public void setPreviewDayOfWeek(int previewDayOfWeek) {
+        this.previewDayOfWeek = previewDayOfWeek;
+    }
+
     @Override
     public String toString() {
         return "PicksPrice{" +
@@ -127,7 +166,11 @@ public class PicksPrice {
                 ", pickPrice5=" + pickPrice5 +
                 ", allowSignUp=" + allowSignUp +
                 ", kothSeason='" + kothSeason + '\'' +
-                ", maskPicks=" + maskPicks + 
+                ", maskPicks=" + maskPicks +
+                ", snarkLevel=" + snarkLevel +
+                ", commentaryEnabled=" + commentaryEnabled +
+                ", commentaryNotifications=" + commentaryNotifications +
+                ", previewDayOfWeek=" + previewDayOfWeek +
                 '}';
     }
 }

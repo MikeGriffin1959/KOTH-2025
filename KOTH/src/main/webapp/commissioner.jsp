@@ -362,6 +362,54 @@
 			</div>
 		</div>
   
+        <!-- Commentary Card (M1) -->
+        <div class="row">
+            <div class="col-12 col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h5 class="mb-0">Commentary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="commentaryAlert" class="alert" style="display: none;"></div>
+
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="commentaryEnabledCheck">
+                            <label class="form-check-label" for="commentaryEnabledCheck">Enable Commentary</label>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="snarkLevelSlider">
+                                Snark Level: <span id="snarkLevelBadge" class="badge badge-secondary">5</span>
+                            </label>
+                            <input type="range" class="custom-range" id="snarkLevelSlider" min="0" max="10" step="1" value="5">
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="commentaryNotificationsCheck">
+                            <label class="form-check-label" for="commentaryNotificationsCheck">Notifications (SMS &mdash; coming soon)</label>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="previewDaySelect">Preview Day:</label>
+                            <select class="form-control" id="previewDaySelect">
+                                <option value="1">Monday</option>
+                                <option value="2">Tuesday</option>
+                                <option value="3">Wednesday</option>
+                                <option value="4">Thursday</option>
+                                <option value="5">Friday</option>
+                                <option value="6">Saturday</option>
+                                <option value="7">Sunday</option>
+                            </select>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" id="testCommentaryBtn">Fire Test Commentary</button>
+                        <div id="testCommentaryReadout" class="mt-3"
+                             style="display:none; white-space: pre-wrap; background:#222; color:#eee; padding:10px; border-radius:4px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- User Data Table -->
         <div class="row">
             <div class="col-12 mb-4">
@@ -737,6 +785,107 @@ function confirmScheduleCreation(confirmed) {
         alertDiv.innerHTML = 'Error: ' + error.message;
     });
 }
+</script>
+
+<script>
+// Commentary card (M1): init from pickPricesJson meta-tag, instant-save via AJAX.
+document.addEventListener('DOMContentLoaded', function() {
+    const enableCheck = document.getElementById('commentaryEnabledCheck');
+    if (!enableCheck) return; // card not on page
+
+    const snarkSlider = document.getElementById('snarkLevelSlider');
+    const snarkBadge = document.getElementById('snarkLevelBadge');
+    const notifyCheck = document.getElementById('commentaryNotificationsCheck');
+    const previewSelect = document.getElementById('previewDaySelect');
+    const testBtn = document.getElementById('testCommentaryBtn');
+    const readout = document.getElementById('testCommentaryReadout');
+    const alertDiv = document.getElementById('commentaryAlert');
+
+    function updateSnarkBadge(val) {
+        snarkBadge.textContent = val;
+        let cls = 'badge badge-success';      // green at the calm end
+        if (val >= 8) cls = 'badge badge-danger';   // red at the savage end
+        else if (val >= 4) cls = 'badge badge-warning';
+        snarkBadge.className = cls;
+    }
+
+    // Initialize controls from the pickPricesJson meta tag (same source as maskPicks)
+    try {
+        const meta = document.querySelector('meta[name="pickPricesJson"]');
+        if (meta) {
+            const cfg = JSON.parse(meta.content);
+            if (cfg.commentaryEnabled !== undefined) enableCheck.checked = cfg.commentaryEnabled;
+            if (cfg.commentaryNotifications !== undefined) notifyCheck.checked = cfg.commentaryNotifications;
+            if (cfg.snarkLevel !== undefined) { snarkSlider.value = cfg.snarkLevel; updateSnarkBadge(parseInt(cfg.snarkLevel, 10)); }
+            else { updateSnarkBadge(parseInt(snarkSlider.value, 10)); }
+            if (cfg.previewDayOfWeek !== undefined) previewSelect.value = cfg.previewDayOfWeek;
+        }
+    } catch (e) {
+        console.error('Error parsing pickPricesJson for commentary:', e);
+        updateSnarkBadge(parseInt(snarkSlider.value, 10));
+    }
+
+    function showAlert(data) {
+        alertDiv.textContent = data.message || (data.success ? 'Saved' : 'Error');
+        alertDiv.className = data.success ? 'alert alert-success' : 'alert alert-danger';
+        alertDiv.style.display = 'block';
+        setTimeout(function() { alertDiv.style.display = 'none'; }, 4000);
+    }
+
+    function postSetting(params) {
+        return fetch('CommissionerServlet', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: params
+        }).then(function(r) { return r.json(); });
+    }
+
+    enableCheck.addEventListener('change', function() {
+        postSetting('action=toggleCommentary&commentaryEnabled=' + this.checked)
+            .then(showAlert)
+            .catch(function(e) { showAlert({ success: false, message: 'Error: ' + e.message }); });
+    });
+
+    notifyCheck.addEventListener('change', function() {
+        postSetting('action=toggleCommentaryNotifications&commentaryNotifications=' + this.checked)
+            .then(showAlert)
+            .catch(function(e) { showAlert({ success: false, message: 'Error: ' + e.message }); });
+    });
+
+    // Live badge while dragging; persist on release.
+    snarkSlider.addEventListener('input', function() { updateSnarkBadge(parseInt(this.value, 10)); });
+    snarkSlider.addEventListener('change', function() {
+        postSetting('action=setSnarkLevel&snarkLevel=' + this.value)
+            .then(showAlert)
+            .catch(function(e) { showAlert({ success: false, message: 'Error: ' + e.message }); });
+    });
+
+    previewSelect.addEventListener('change', function() {
+        postSetting('action=setPreviewDayOfWeek&previewDayOfWeek=' + this.value)
+            .then(showAlert)
+            .catch(function(e) { showAlert({ success: false, message: 'Error: ' + e.message }); });
+    });
+
+    testBtn.addEventListener('click', function() {
+        const original = testBtn.textContent;
+        testBtn.disabled = true;
+        testBtn.textContent = 'Generating…';
+        readout.style.display = 'none';
+        postSetting('action=testCommentary')
+            .then(function(data) {
+                showAlert(data);
+                if (data.success && data.body) {
+                    readout.textContent = data.body;
+                    readout.style.display = 'block';
+                }
+            })
+            .catch(function(e) { showAlert({ success: false, message: 'Error: ' + e.message }); })
+            .then(function() { testBtn.disabled = false; testBtn.textContent = original; });
+    });
+});
 </script>
 </body>
 </html>
