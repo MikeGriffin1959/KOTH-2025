@@ -22,7 +22,10 @@ param(
     [string]$VersionLabel = "v$(Get-Date -Format yyyyMMddHHmmss)"
 )
 
-$ErrorActionPreference = "Stop"
+# Continue (not Stop): native tools (mvn on JDK 24, aws cli progress) write to
+# stderr, which under 'Stop' PowerShell turns into a terminating error. The
+# explicit Test-Path / exit-code checks below catch real failures instead.
+$ErrorActionPreference = "Continue"
 
 $aws       = "C:\Program Files\Amazon\AWSCLIV2\aws.exe"
 $mvn       = "C:\tools\apache-maven-3.9.9\bin\mvn.cmd"
