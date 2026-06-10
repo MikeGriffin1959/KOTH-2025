@@ -1,7 +1,9 @@
 package controllers;
 
+import helpers.SmsPreferencesDAO;
 import helpers.SqlConnectorUserTable;
 import model.User;
+import services.PhoneVerificationService;
 import services.ServletUtility;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -15,6 +17,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Controller
 public class UpdateUserInfoServlet {
@@ -23,6 +27,12 @@ public class UpdateUserInfoServlet {
 
     @Autowired
     private ServletUtility servletUtility;  // ✅ Inject instead of static calls
+
+    @Autowired
+    private PhoneVerificationService phoneVerificationService; // SMS feature
+
+    @Autowired
+    private SmsPreferencesDAO smsPreferencesDAO; // SMS feature
 
     @Autowired
     public UpdateUserInfoServlet(SqlConnectorUserTable sqlConnectorUserTable) {
@@ -52,6 +62,8 @@ public class UpdateUserInfoServlet {
         }
 
         model.addAttribute("user", user);
+        // SMS notification preferences for the Text Message card
+        model.addAttribute("smsPrefs", smsPreferencesDAO.getUserPreferencesDetail(user.getIdUser()));
 
         long endTime = System.nanoTime();
         System.out.printf("UpdateUserInfoServlet.doGet Method execution time: %.1f Seconds%n",
@@ -73,8 +85,23 @@ public class UpdateUserInfoServlet {
         }
 
         servletUtility.setCommonAttributes(request, request.getServletContext());
-
         String currentUserName = (String) session.getAttribute("userName");
+
+        // SMS feature actions (mirrors GolferFest's UpdateUserInfoServlet)
+        String action = request.getParameter("action");
+        if ("sendVerificationCode".equals(action)) {
+            handleSendVerificationCode(request, response);
+            return null;
+        }
+        if ("checkVerificationCode".equals(action)) {
+            handleCheckVerificationCode(request, response, currentUserName);
+            return null;
+        }
+        if ("updateSmsPrefs".equals(action)) {
+            handleUpdateSmsPrefs(request, redirectAttributes, currentUserName);
+            return "redirect:/UpdateUserInfoServlet";
+        }
+
         String firstName = request.getParameter("firstName");
         String lastName = request.getParameter("lastName");
         String userName = request.getParameter("userName");
@@ -95,12 +122,24 @@ public class UpdateUserInfoServlet {
             return "redirect:/UpdateUserInfoServlet";
         }
 
+        // If the cell number changed, the old verification no longer applies.
+        User existing = sqlConnectorUserTable.getUserByUsername(currentUserName);
+        boolean phoneChanged = existing != null && existing.isPhoneVerified()
+                && existing.getCellNumber() != null
+                && !PhoneVerificationService.normalizePhoneNumber(existing.getCellNumber())
+                        .equals(PhoneVerificationService.normalizePhoneNumber(cellNumber));
+
         // ✅ Update user info in DB
         boolean isUpdated = sqlConnectorUserTable.updateUserInfo(currentUserName, firstName, lastName, userName, email, cellNumber);
 
         if (isUpdated) {
+            if (phoneChanged) {
+                smsPreferencesDAO.clearPhoneVerification(existing.getIdUser());
+                System.out.println("UpdateUserInfoServlet: cell number changed — cleared phone verification for user " + existing.getIdUser());
+            }
             session.setAttribute("userName", userName);
-            redirectAttributes.addFlashAttribute("message", "User information updated successfully.");
+            redirectAttributes.addFlashAttribute("message", "User information updated successfully."
+                    + (phoneChanged ? " Your new number needs to be re-verified for text messages." : ""));
             redirectAttributes.addFlashAttribute("messageType", "success");
         } else {
             redirectAttributes.addFlashAttribute("message", "Failed to update user information. Please try again.");
@@ -114,10 +153,86 @@ public class UpdateUserInfoServlet {
         return "redirect:/UpdateUserInfoServlet";
     }
 
+    // -------------------------------------------------------------------------
+    // SMS feature handlers (AJAX, JSON responses)
+    // -------------------------------------------------------------------------
+
+    private void handleSendVerificationCode(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            if (!phoneVerificationService.isConfigured()) {
+                writeJson(response, false, "Text messaging is not configured");
+                return;
+            }
+            String phone = PhoneVerificationService.normalizePhoneNumber(request.getParameter("phone"));
+            if (phone == null || phone.length() < 11) {
+                writeJson(response, false, "Enter a valid phone number first");
+                return;
+            }
+            phoneVerificationService.sendVerificationCode(phone);
+            writeJson(response, true, "Verification code sent to " + phone);
+        } catch (Exception e) {
+            System.err.println("UpdateUserInfoServlet.handleSendVerificationCode - Error: " + e.getMessage());
+            writeJson(response, false, "Could not send code: " + e.getMessage());
+        }
+    }
+
+    private void handleCheckVerificationCode(HttpServletRequest request, HttpServletResponse response,
+                                             String currentUserName) throws IOException {
+        response.setContentType("application/json");
+        try {
+            String phone = PhoneVerificationService.normalizePhoneNumber(request.getParameter("phone"));
+            String code = request.getParameter("code");
+            if (code == null || !code.matches("\\d{6}")) {
+                writeJson(response, false, "Enter the 6-digit code");
+                return;
+            }
+            boolean approved = phoneVerificationService.checkVerificationCode(phone, code);
+            if (!approved) {
+                writeJson(response, false, "Invalid or expired code — try again");
+                return;
+            }
+            User user = sqlConnectorUserTable.getUserByUsername(currentUserName);
+            if (user == null) {
+                writeJson(response, false, "User not found");
+                return;
+            }
+            smsPreferencesDAO.markPhoneVerified(user.getIdUser(), phone);
+            smsPreferencesDAO.initializeDefaultPreferences(user.getIdUser());
+            writeJson(response, true, "Phone verified!");
+        } catch (Exception e) {
+            System.err.println("UpdateUserInfoServlet.handleCheckVerificationCode - Error: " + e.getMessage());
+            writeJson(response, false, "Verification failed: " + e.getMessage());
+        }
+    }
+
+    private void handleUpdateSmsPrefs(HttpServletRequest request, RedirectAttributes redirectAttributes,
+                                      String currentUserName) {
+        try {
+            User user = sqlConnectorUserTable.getUserByUsername(currentUserName);
+            if (user == null) return;
+
+            Map<String, Boolean> prefs = new LinkedHashMap<>();
+            for (Map<String, Object> p : smsPreferencesDAO.getUserPreferencesDetail(user.getIdUser())) {
+                String typeKey = (String) p.get("typeKey");
+                prefs.put(typeKey, request.getParameter("pref_" + typeKey) != null);
+            }
+            smsPreferencesDAO.updatePreferences(user.getIdUser(), prefs);
+            redirectAttributes.addFlashAttribute("message", "Text message preferences saved.");
+            redirectAttributes.addFlashAttribute("messageType", "success");
+        } catch (Exception e) {
+            System.err.println("UpdateUserInfoServlet.handleUpdateSmsPrefs - Error: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("message", "Failed to save preferences.");
+            redirectAttributes.addFlashAttribute("messageType", "error");
+        }
+    }
+
+    private void writeJson(HttpServletResponse response, boolean success, String message) throws IOException {
+        response.getWriter().write(String.format("{\"success\": %b, \"message\": \"%s\"}",
+                success, message.replace("\"", "'")));
+    }
+
     private boolean isEmpty(String value) {
         return value == null || value.trim().isEmpty();
     }
 }
-
-
-

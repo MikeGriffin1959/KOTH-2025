@@ -134,7 +134,7 @@ public class SqlConnectorUserTable {
         System.out.println("SqlConnectorUserTable.GetAllUsersForSeason method called");
         List<User> users = new ArrayList<>();
         String sql = "SELECT DISTINCT u.idUser, u.firstName, u.lastName, u.username, u.email, " +
-                     "u.commish, u.picksPaid, u.initialPicks " +
+                     "u.commish, u.picksPaid, u.initialPicks, u.cellNumber, u.phoneVerified " +
                      "FROM KOTH.User u " +
                      "WHERE u.picksSeason = ? " +
                      "ORDER BY u.lastName";
@@ -156,6 +156,8 @@ public class SqlConnectorUserTable {
                     user.setCommish(resultSet.getBoolean("commish"));
                     user.setPicksPaid(resultSet.getBoolean("picksPaid"));
                     user.setInitialPicks(resultSet.getInt("initialPicks"));
+                    user.setCellNumber(resultSet.getString("cellNumber"));
+                    user.setPhoneVerified(resultSet.getBoolean("phoneVerified"));
                     user.setPicksSeason(season);
 
                     // Debug logging
@@ -213,7 +215,7 @@ public class SqlConnectorUserTable {
     // Get user info by username instead of userID (UpdateUserInfo Servlet)
     public User getUserByUsername(String username) {
         System.out.println("SqlConnectorUserTable.getUserByUsername method called");
-        String sql = "SELECT idUser, firstName, lastName, userName, email, cellNumber FROM KOTH.User WHERE userName = ?";
+        String sql = "SELECT idUser, firstName, lastName, userName, email, cellNumber, phoneVerified FROM KOTH.User WHERE userName = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
@@ -227,6 +229,7 @@ public class SqlConnectorUserTable {
                     user.setUsername(resultSet.getString("userName"));
                     user.setEmail(resultSet.getString("email"));
                     user.setCellNumber(resultSet.getString("cellNumber"));
+                    user.setPhoneVerified(resultSet.getBoolean("phoneVerified"));
                     return user;
                 }
             }

@@ -45,6 +45,9 @@ public class CommissionerServlet {
     private CommentaryService commentaryService; // Commentary feature (M1)
 
     @Autowired
+    private services.SmsService smsService; // SMS feature (ported from GolferFest)
+
+    @Autowired
     public CommissionerServlet(SqlConnectorUserTable sqlConnectorUserTable,
                               SqlConnectorPicksTable sqlConnectorPicksTable,
                               SqlConnectorGameTable sqlConnectorGameTable,
@@ -316,6 +319,18 @@ public class CommissionerServlet {
 
                 case "testCommentary":
                     handleTestCommentary(request, response);
+                    return null;
+
+                case "sendTestSms":
+                    handleSendTestSms(request, response);
+                    return null;
+
+                case "sendUserSms":
+                    handleSendUserSms(request, response);
+                    return null;
+
+                case "sendBroadcastSms":
+                    handleSendBroadcastSms(request, response, season);
                     return null;
 
                 default:
@@ -1024,6 +1039,84 @@ public class CommissionerServlet {
         } catch (Exception e) {
             System.err.println("CommissionerServlet: Error in handleSetPreviewDayOfWeek: " + e.getMessage());
             writeJsonResponse(response, false, "Error updating preview day");
+        }
+    }
+
+    // ── SMS (ported from GolferFest) ──────────────────────────────────────
+    // Commissioner sends are raw (no opt-in check) — the UI restricts the user
+    // dropdown to verified numbers and broadcast filters on phoneVerified.
+
+    private void handleSendTestSms(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            if (!smsService.isConfigured()) {
+                writeJsonResponse(response, false, "Twilio is not configured");
+                return;
+            }
+            String phone = services.PhoneVerificationService.normalizePhoneNumber(request.getParameter("phone"));
+            if (phone == null || phone.length() < 11) {
+                writeJsonResponse(response, false, "Enter a valid phone number");
+                return;
+            }
+            String userName = (String) request.getSession(false).getAttribute("userName");
+            smsService.sendSms(phone, "[KOTH] Test message from commissioner " + userName + ". SMS is working!");
+            writeJsonResponse(response, true, "Test SMS sent to " + phone);
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleSendTestSms: " + e.getMessage());
+            writeJsonResponse(response, false, "Send failed: " + e.getMessage().replace("\"", "'"));
+        }
+    }
+
+    private void handleSendUserSms(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            int userId = Integer.parseInt(request.getParameter("userId"));
+            String message = request.getParameter("message");
+            if (message == null || message.trim().isEmpty()) {
+                writeJsonResponse(response, false, "Message is empty");
+                return;
+            }
+            User target = sqlConnectorUserTable.getUserById(userId);
+            if (target == null || target.getCellNumber() == null || target.getCellNumber().isEmpty()) {
+                writeJsonResponse(response, false, "User has no cell number");
+                return;
+            }
+            String commName = (String) request.getSession(false).getAttribute("userName");
+            String phone = services.PhoneVerificationService.normalizePhoneNumber(target.getCellNumber());
+            smsService.sendSms(phone, "[KOTH] From " + commName + ": " + message.trim());
+            writeJsonResponse(response, true, "SMS sent to " + target.getFirstName() + " " + target.getLastName());
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleSendUserSms: " + e.getMessage());
+            writeJsonResponse(response, false, "Send failed: " + e.getMessage().replace("\"", "'"));
+        }
+    }
+
+    private void handleSendBroadcastSms(HttpServletRequest request, HttpServletResponse response, int season) throws IOException {
+        response.setContentType("application/json");
+        try {
+            String message = request.getParameter("message");
+            if (message == null || message.trim().isEmpty()) {
+                writeJsonResponse(response, false, "Message is empty");
+                return;
+            }
+            String body = "[KOTH] " + message.trim();
+            int sent = 0, skipped = 0, failed = 0;
+            for (User u : sqlConnectorUserTable.getAllUsersForSeason(season)) {
+                if (u.getCellNumber() == null || u.getCellNumber().isEmpty() || !u.isPhoneVerified()) {
+                    skipped++;
+                    continue;
+                }
+                try {
+                    smsService.sendSms(services.PhoneVerificationService.normalizePhoneNumber(u.getCellNumber()), body);
+                    sent++;
+                } catch (Exception e) {
+                    failed++;
+                }
+            }
+            writeJsonResponse(response, true, "Broadcast: " + sent + " sent, " + skipped + " skipped (unverified), " + failed + " failed");
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleSendBroadcastSms: " + e.getMessage());
+            writeJsonResponse(response, false, "Broadcast failed: " + e.getMessage().replace("\"", "'"));
         }
     }
 

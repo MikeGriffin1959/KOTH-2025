@@ -410,6 +410,47 @@
             </div>
         </div>
 
+        <!-- Text Messaging Card (SMS, ported from GolferFest) -->
+        <div class="row">
+            <div class="col-12 col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h5 class="mb-0">Text Messaging</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="smsAlert" class="alert" style="display: none;"></div>
+
+                        <h6><i class="fas fa-vial"></i> Quick Test</h6>
+                        <div class="d-flex mb-3" style="gap:8px;">
+                            <input type="text" class="form-control" id="testPhone" placeholder="+15551234567">
+                            <button type="button" class="btn btn-sm btn-outline-info" onclick="sendTestSms()" id="testSmsBtn">
+                                <i class="fas fa-paper-plane"></i> Send
+                            </button>
+                        </div>
+
+                        <h6><i class="fas fa-user"></i> Send to User</h6>
+                        <select class="form-control mb-2" id="smsUserSelect">
+                            <option value="">Select user (verified only)</option>
+                            <c:forEach var="user" items="${sortedUsers}">
+                                <c:if test="${not empty user.cellNumber && user.phoneVerified}">
+                                    <option value="${user.idUser}">${user.lastName}, ${user.firstName}</option>
+                                </c:if>
+                            </c:forEach>
+                        </select>
+                        <textarea class="form-control mb-1" id="smsUserMessage" maxlength="320" rows="2" placeholder="Message"></textarea>
+                        <small style="color:#999;"><span id="smsCharCount">0</span>/320</small>
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="sendUserSms()" id="userSmsBtn">Send</button>
+                        </div>
+
+                        <h6><i class="fas fa-bullhorn"></i> Broadcast to Pool</h6>
+                        <textarea class="form-control mb-2" id="smsBroadcastMessage" maxlength="320" rows="2" placeholder="Message to all verified players"></textarea>
+                        <button type="button" class="btn btn-sm btn-warning" onclick="sendBroadcastSms()" id="broadcastSmsBtn">Broadcast</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- User Data Table -->
         <div class="row">
             <div class="col-12 mb-4">
@@ -868,6 +909,60 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(showAlert)
             .catch(function(e) { showAlert({ success: false, message: 'Error: ' + e.message }); });
     });
+
+    // ── Text Messaging card (SMS) ─────────────────────────────────────────
+    const smsAlert = document.getElementById('smsAlert');
+    function showSmsAlert(data) {
+        smsAlert.textContent = data.message || (data.success ? 'Sent' : 'Error');
+        smsAlert.className = data.success ? 'alert alert-success' : 'alert alert-danger';
+        smsAlert.style.display = 'block';
+        setTimeout(function() { smsAlert.style.display = 'none'; }, 6000);
+    }
+    const smsUserMessage = document.getElementById('smsUserMessage');
+    if (smsUserMessage) {
+        smsUserMessage.addEventListener('input', function() {
+            document.getElementById('smsCharCount').textContent = this.value.length;
+        });
+    }
+    window.sendTestSms = function() {
+        const phone = document.getElementById('testPhone').value.trim();
+        if (!phone) { showSmsAlert({ success: false, message: 'Enter a phone number' }); return; }
+        const btn = document.getElementById('testSmsBtn');
+        btn.disabled = true;
+        postSetting('action=sendTestSms&phone=' + encodeURIComponent(phone))
+            .then(showSmsAlert)
+            .catch(function(e) { showSmsAlert({ success: false, message: 'Error: ' + e.message }); })
+            .then(function() { btn.disabled = false; });
+    };
+    window.sendUserSms = function() {
+        const userId = document.getElementById('smsUserSelect').value;
+        const msg = smsUserMessage.value.trim();
+        if (!userId) { showSmsAlert({ success: false, message: 'Select a user' }); return; }
+        if (!msg) { showSmsAlert({ success: false, message: 'Enter a message' }); return; }
+        const btn = document.getElementById('userSmsBtn');
+        btn.disabled = true;
+        postSetting('action=sendUserSms&userId=' + encodeURIComponent(userId) + '&message=' + encodeURIComponent(msg))
+            .then(function(data) {
+                showSmsAlert(data);
+                if (data.success) { smsUserMessage.value = ''; document.getElementById('smsCharCount').textContent = '0'; }
+            })
+            .catch(function(e) { showSmsAlert({ success: false, message: 'Error: ' + e.message }); })
+            .then(function() { btn.disabled = false; });
+    };
+    window.sendBroadcastSms = function() {
+        const msg = document.getElementById('smsBroadcastMessage').value.trim();
+        if (!msg) { showSmsAlert({ success: false, message: 'Enter a message' }); return; }
+        if (!confirm('Send this text to ALL verified players?')) return;
+        const btn = document.getElementById('broadcastSmsBtn');
+        btn.disabled = true;
+        postSetting('action=sendBroadcastSms&message=' + encodeURIComponent(msg))
+            .then(function(data) {
+                showSmsAlert(data);
+                if (data.success) { document.getElementById('smsBroadcastMessage').value = ''; }
+            })
+            .catch(function(e) { showSmsAlert({ success: false, message: 'Error: ' + e.message }); })
+            .then(function() { btn.disabled = false; });
+    };
 
     testBtn.addEventListener('click', function() {
         const original = testBtn.textContent;
