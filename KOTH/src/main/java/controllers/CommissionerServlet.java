@@ -333,6 +333,14 @@ public class CommissionerServlet {
                     handleSendBroadcastSms(request, response, season);
                     return null;
 
+                case "sendUserEmail":
+                    handleSendUserEmail(request, response);
+                    return null;
+
+                case "sendBroadcastEmail":
+                    handleSendBroadcastEmail(request, response, season);
+                    return null;
+
                 default:
                     model.addAttribute("message", "Invalid action specified");
             }
@@ -1116,6 +1124,69 @@ public class CommissionerServlet {
             writeJsonResponse(response, true, "Broadcast: " + sent + " sent, " + skipped + " skipped (unverified), " + failed + " failed");
         } catch (Exception e) {
             System.err.println("CommissionerServlet: Error in handleSendBroadcastSms: " + e.getMessage());
+            writeJsonResponse(response, false, "Broadcast failed: " + e.getMessage().replace("\"", "'"));
+        }
+    }
+
+    // ── Commissioner email (ported from GolferFest) ───────────────────────
+
+    @Autowired
+    private services.EmailService emailService;
+
+    private void handleSendUserEmail(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        try {
+            int userId = Integer.parseInt(request.getParameter("userId"));
+            String subject = request.getParameter("subject");
+            String message = request.getParameter("message");
+            if (subject == null || subject.trim().isEmpty() || message == null || message.trim().isEmpty()) {
+                writeJsonResponse(response, false, "Subject and message are required");
+                return;
+            }
+            User target = sqlConnectorUserTable.getUserById(userId);
+            if (target == null || target.getEmail() == null || target.getEmail().isEmpty()) {
+                writeJsonResponse(response, false, "User has no email on file");
+                return;
+            }
+            emailService.sendCommissionerEmail(target.getEmail(), subject.trim(), message.trim());
+            writeJsonResponse(response, true, "Email sent to " + target.getEmail().replace("\"", "'"));
+        } catch (NumberFormatException e) {
+            writeJsonResponse(response, false, "Invalid user ID");
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleSendUserEmail: " + e.getMessage());
+            writeJsonResponse(response, false, "Send failed: " + e.getMessage().replace("\"", "'"));
+        }
+    }
+
+    private void handleSendBroadcastEmail(HttpServletRequest request, HttpServletResponse response, int season) throws IOException {
+        response.setContentType("application/json");
+        try {
+            String subject = request.getParameter("subject");
+            String message = request.getParameter("message");
+            if (subject == null || subject.trim().isEmpty() || message == null || message.trim().isEmpty()) {
+                writeJsonResponse(response, false, "Subject and message are required");
+                return;
+            }
+            int sent = 0, skipped = 0, failed = 0;
+            for (User u : sqlConnectorUserTable.getAllUsersForSeason(season)) {
+                if (u.getEmail() == null || u.getEmail().isEmpty()) {
+                    skipped++;
+                    continue;
+                }
+                try {
+                    emailService.sendCommissionerEmail(u.getEmail(), subject.trim(), message.trim());
+                    sent++;
+                } catch (Exception sendEx) {
+                    System.err.println("CommissionerServlet: broadcast email failed for user " + u.getIdUser()
+                            + ": " + sendEx.getMessage());
+                    failed++;
+                }
+            }
+            writeJsonResponse(response, true, "Email sent to " + sent + " player(s)"
+                    + (skipped > 0 ? ", " + skipped + " without email" : "")
+                    + (failed > 0 ? ", " + failed + " failed" : ""));
+        } catch (Exception e) {
+            System.err.println("CommissionerServlet: Error in handleSendBroadcastEmail: " + e.getMessage());
             writeJsonResponse(response, false, "Broadcast failed: " + e.getMessage().replace("\"", "'"));
         }
     }

@@ -45,6 +45,21 @@ public class EmailService {
         mailSender.send(message);
     }
 
+    public void sendCommissionerEmail(String to, String subject, String body) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+        helper.setFrom(senderEmail);
+        helper.setTo(to);
+        helper.setSubject("[KOTH] " + subject);
+        // Plain text from the commissioner, HTML-escaped and line-break preserved
+        String safe = body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                          .replace("\r\n", "\n").replace("\n", "<br>");
+        helper.setText("<p>" + safe + "</p>", true);
+
+        mailSender.send(message);
+    }
+
     public void sendUsernameRecoveryEmail(String to, String username) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");

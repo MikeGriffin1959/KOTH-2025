@@ -461,6 +461,38 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Email Card (ported from GolferFest) -->
+            <div class="col-12 col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h5 class="mb-0">Email</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="emailAlert" class="alert" style="display: none;"></div>
+
+                        <h6><i class="fas fa-user"></i> Send to User</h6>
+                        <select class="form-control mb-2" id="emailUserSelect">
+                            <option value="">Select user</option>
+                            <c:forEach var="user" items="${sortedUsers}">
+                                <c:if test="${not empty user.email}">
+                                    <option value="${user.idUser}">${user.lastName}, ${user.firstName}</option>
+                                </c:if>
+                            </c:forEach>
+                        </select>
+                        <input type="text" class="form-control mb-2" id="emailUserSubject" maxlength="100" placeholder="Subject">
+                        <textarea class="form-control mb-2" id="emailUserMessage" maxlength="2000" rows="3" placeholder="Message"></textarea>
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="sendUserEmail()" id="userEmailBtn">Send</button>
+                        </div>
+
+                        <h6><i class="fas fa-bullhorn"></i> Broadcast to Pool</h6>
+                        <input type="text" class="form-control mb-2" id="emailBroadcastSubject" maxlength="100" placeholder="Subject">
+                        <textarea class="form-control mb-2" id="emailBroadcastMessage" maxlength="2000" rows="3" placeholder="Message to all players"></textarea>
+                        <button type="button" class="btn btn-sm btn-warning" onclick="sendBroadcastEmail()" id="broadcastEmailBtn">Broadcast</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- User Data Table -->
@@ -995,6 +1027,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) { document.getElementById('smsBroadcastMessage').value = ''; }
             })
             .catch(function(e) { showSmsAlert({ success: false, message: 'Error: ' + e.message }); })
+            .then(function() { btn.disabled = false; });
+    };
+
+    // ── Email card ────────────────────────────────────────────────────────
+    const emailAlert = document.getElementById('emailAlert');
+    function showEmailAlert(data) {
+        emailAlert.textContent = data.message || (data.success ? 'Sent' : 'Error');
+        emailAlert.className = data.success ? 'alert alert-success' : 'alert alert-danger';
+        emailAlert.style.display = 'block';
+        setTimeout(function() { emailAlert.style.display = 'none'; }, 6000);
+    }
+    window.sendUserEmail = function() {
+        const userId = document.getElementById('emailUserSelect').value;
+        const subject = document.getElementById('emailUserSubject').value.trim();
+        const msg = document.getElementById('emailUserMessage').value.trim();
+        if (!userId) { showEmailAlert({ success: false, message: 'Select a user' }); return; }
+        if (!subject || !msg) { showEmailAlert({ success: false, message: 'Subject and message are required' }); return; }
+        const btn = document.getElementById('userEmailBtn');
+        btn.disabled = true;
+        postSetting('action=sendUserEmail&userId=' + encodeURIComponent(userId)
+                + '&subject=' + encodeURIComponent(subject) + '&message=' + encodeURIComponent(msg))
+            .then(function(data) {
+                showEmailAlert(data);
+                if (data.success) {
+                    document.getElementById('emailUserSubject').value = '';
+                    document.getElementById('emailUserMessage').value = '';
+                }
+            })
+            .catch(function(e) { showEmailAlert({ success: false, message: 'Error: ' + e.message }); })
+            .then(function() { btn.disabled = false; });
+    };
+    window.sendBroadcastEmail = function() {
+        const subject = document.getElementById('emailBroadcastSubject').value.trim();
+        const msg = document.getElementById('emailBroadcastMessage').value.trim();
+        if (!subject || !msg) { showEmailAlert({ success: false, message: 'Subject and message are required' }); return; }
+        if (!confirm('Email this to ALL players?')) return;
+        const btn = document.getElementById('broadcastEmailBtn');
+        btn.disabled = true;
+        postSetting('action=sendBroadcastEmail&subject=' + encodeURIComponent(subject)
+                + '&message=' + encodeURIComponent(msg))
+            .then(function(data) {
+                showEmailAlert(data);
+                if (data.success) {
+                    document.getElementById('emailBroadcastSubject').value = '';
+                    document.getElementById('emailBroadcastMessage').value = '';
+                }
+            })
+            .catch(function(e) { showEmailAlert({ success: false, message: 'Error: ' + e.message }); })
             .then(function() { btn.disabled = false; });
     };
 
