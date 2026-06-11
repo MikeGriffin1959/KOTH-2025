@@ -146,6 +146,107 @@ public class SqlConnectorCommentaryTable {
         }
     }
 
+    /**
+     * Stream-aware dedupe: has a row of this streamType already been generated
+     * for the week? (idx_dedupe alone can't distinguish TEST from RECAP since
+     * both carry NULL gameId/eventType.) Used by CommentaryScheduler.
+     */
+    public boolean hasCommentary(int season, int week, String streamType) {
+        String sql = "SELECT COUNT(*) FROM KOTH.Commentary WHERE season = ? AND week = ? AND streamType = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, week);
+            ps.setString(3, streamType);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorCommentaryTable.hasCommentary - Error: " + e.getMessage());
+            return true; // fail safe — assume already generated (don't double-spend)
+        }
+    }
+
+    /**
+     * One row per pick for the given week with the game outcome attached —
+     * the raw material for the Week Recap prompt (Commentary M2).
+     * Keys: username, firstName, selectedTeam, homeTeamName, awayTeamName,
+     *       homeScore, awayScore, status
+     */
+    public List<java.util.Map<String, Object>> getWeekPickOutcomes(int season, int week) {
+        List<java.util.Map<String, Object>> rows = new ArrayList<>();
+        String sql = "SELECT u.username, u.firstName, p.selectedTeam, " +
+                     "g.homeTeamName, g.awayTeamName, g.homeScore, g.awayScore, g.status " +
+                     "FROM KOTH.Picks p " +
+                     "JOIN KOTH.User u ON u.idUser = p.userId " +
+                     "JOIN KOTH.Game g ON g.GameID = p.gameId " +
+                     "WHERE p.season = ? AND p.week = ? " +
+                     "ORDER BY u.username, p.pickID";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, week);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> row = new java.util.HashMap<>();
+                    row.put("username", rs.getString("username"));
+                    row.put("firstName", rs.getString("firstName"));
+                    row.put("selectedTeam", rs.getString("selectedTeam"));
+                    row.put("homeTeamName", rs.getString("homeTeamName"));
+                    row.put("awayTeamName", rs.getString("awayTeamName"));
+                    row.put("homeScore", rs.getInt("homeScore"));
+                    row.put("awayScore", rs.getInt("awayScore"));
+                    row.put("status", rs.getString("status"));
+                    rows.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorCommentaryTable.getWeekPickOutcomes - Error: " + e.getMessage());
+        }
+        return rows;
+    }
+
+    /**
+     * Season standings for the recap: per user, initial picks and season-to-date
+     * losses (a tie is a loss — same rule as CommonProcessingService.isWinningPick).
+     * Keys: username, firstName, initialPicks, losses, remaining
+     */
+    public List<java.util.Map<String, Object>> getSeasonStandings(int season) {
+        List<java.util.Map<String, Object>> rows = new ArrayList<>();
+        String sql = "SELECT u.username, u.firstName, COALESCE(u.initialPicks,0) AS initialPicks, " +
+                     "SUM(CASE WHEN g.status IN ('STATUS_FINAL','Final','F/OT') AND ( " +
+                     "  (p.selectedTeam = g.homeTeamName AND g.homeScore <= g.awayScore) OR " +
+                     "  (p.selectedTeam = g.awayTeamName AND g.awayScore <= g.homeScore) " +
+                     ") THEN 1 ELSE 0 END) AS losses " +
+                     "FROM KOTH.User u " +
+                     "LEFT JOIN KOTH.Picks p ON p.userId = u.idUser AND p.season = ? " +
+                     "LEFT JOIN KOTH.Game g ON g.GameID = p.gameId " +
+                     "WHERE u.picksSeason = ? " +
+                     "GROUP BY u.idUser, u.username, u.firstName, u.initialPicks " +
+                     "ORDER BY u.username";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, season);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> row = new java.util.HashMap<>();
+                    int initial = rs.getInt("initialPicks");
+                    int losses = rs.getInt("losses");
+                    row.put("username", rs.getString("username"));
+                    row.put("firstName", rs.getString("firstName"));
+                    row.put("initialPicks", initial);
+                    row.put("losses", losses);
+                    row.put("remaining", Math.max(0, initial - losses));
+                    rows.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorCommentaryTable.getSeasonStandings - Error: " + e.getMessage());
+        }
+        return rows;
+    }
+
     private static final String SELECT_COLUMNS =
             "commentaryId, season, kothSeason, week, streamType, eventType, affectedUserIds, "
             + "gameId, snarkLevel, promptTokens, responseTokens, body, createdAt";

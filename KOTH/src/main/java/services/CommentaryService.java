@@ -128,7 +128,7 @@ public class CommentaryService {
         }
 
         int snarkLevel = cfg.getSnarkLevel();
-        String systemPrompt = buildSystemPrompt(snarkLevel);
+        String systemPrompt = buildSystemPrompt(snarkLevel, "TEST");
         String userPrompt = buildTestPrompt(season, week, snarkLevel);
 
         ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
@@ -229,6 +229,68 @@ public class CommentaryService {
     }
 
     /**
+     * Generate the Week Recap (M2): looks back at the week's outcomes, who
+     * survived and who went home, then persists it (streamType=RECAP). The
+     * persisted row flows through sendCommentarySms → WEEK_RECAP texts when
+     * notifications are enabled. Returns true if a recap was generated.
+     *
+     * Caller (CommentaryScheduler) is responsible for the once-per-week dedupe;
+     * this method re-checks the cheap guards so it is safe to call directly.
+     */
+    public boolean generateWeekRecap(int season, int week) {
+        System.out.println("CommentaryService.generateWeekRecap called for season=" + season + ", week=" + week);
+
+        List<PicksPrice> prices = picksPriceTable.getPickPrices(season);
+        if (prices.isEmpty()) return false;
+        PicksPrice cfg = prices.get(0);
+        if (!cfg.isCommentaryEnabled() || !isConfigured() || dailyCostCapExceeded()) {
+            return false;
+        }
+
+        List<java.util.Map<String, Object>> outcomes = commentaryTable.getWeekPickOutcomes(season, week);
+        List<java.util.Map<String, Object>> standings = commentaryTable.getSeasonStandings(season);
+        if (outcomes.isEmpty()) {
+            System.out.println("CommentaryService.generateWeekRecap - no picks for week " + week + ", skipping");
+            return false;
+        }
+
+        long aliveCount = standings.stream()
+                .filter(s -> ((Integer) s.get("remaining")) > 0)
+                .count();
+        boolean seasonFinale = week >= 22 || aliveCount <= 1;
+
+        int snarkLevel = cfg.getSnarkLevel();
+        String systemPrompt = buildSystemPrompt(snarkLevel, "RECAP");
+        String userPrompt = buildRecapPrompt(season, week, outcomes, standings, aliveCount, seasonFinale);
+
+        ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
+        if (result == null || result.text == null || result.text.isEmpty()) {
+            System.err.println("CommentaryService.generateWeekRecap - empty/failed API response");
+            return false;
+        }
+
+        Commentary commentary = new Commentary();
+        commentary.setSeason(season);
+        commentary.setKothSeason(cfg.getKothSeason());
+        commentary.setWeek(week);
+        commentary.setStreamType("RECAP");
+        commentary.setSnarkLevel(snarkLevel);
+        commentary.setPromptTokens(result.promptTokens);
+        commentary.setResponseTokens(result.responseTokens);
+        commentary.setBody(result.text);
+
+        if (!commentaryTable.insert(commentary)) {
+            System.err.println("CommentaryService.generateWeekRecap - persist failed");
+            return false;
+        }
+
+        sendCommentarySms(commentary, cfg);
+        System.out.println("CommentaryService.generateWeekRecap - persisted commentaryId=" + commentary.getCommentaryId()
+                + (seasonFinale ? " (SEASON FINALE)" : ""));
+        return true;
+    }
+
+    /**
      * True if today's accumulated token spend (across all streams) is at or above
      * the configured daily cap, applying current Sonnet 4.6 pricing. Used as a
      * circuit-breaker before any generation call. Fails open (returns false) only
@@ -261,7 +323,7 @@ public class CommentaryService {
      * the per-stream output formatting (preview/reveal/event/recap) is layered on
      * in later milestones.
      */
-    private String buildSystemPrompt(int snarkLevel) {
+    private String buildSystemPrompt(int snarkLevel, String streamType) {
         StringBuilder sb = new StringBuilder();
 
         sb.append("You are the AI color commentator for KOTH, a private NFL \"King of the Hill\" survivor pool ");
@@ -298,8 +360,79 @@ public class CommentaryService {
         sb.append("3. Refer to players by their display name / first name. Never invent stats, scores, or outcomes beyond ");
         sb.append("the data you are given.\n\n");
 
+        // Per-stream output format
+        switch (streamType) {
+            case "RECAP":
+                sb.append("FORMAT: Week Recap — look back at the week that just ended and set up the next one. ");
+                sb.append("Cover who survived, who lost picks, and any eliminations (sympathetically, per the rules). ");
+                sb.append("If the data marks this as the SEASON FINALE, this is the season-ending sendoff: crown the ");
+                sb.append("champion (or mourn the wipeout), recap the season arc in a line or two, and close the year out. ");
+                sb.append("4-6 sentences.\n\n");
+                break;
+            case "TEST":
+            default:
+                // Test/sample blurbs carry their format in the user prompt.
+                break;
+        }
+
         sb.append("OUTPUT: Natural prose. No markdown, no bullet points, no headers. Keep it tight and broadcast-ready.\n");
 
+        return sb.toString();
+    }
+
+    /**
+     * Week Recap user prompt (M2): real outcomes for the week, pick by pick,
+     * plus season standings so the model knows who's alive.
+     */
+    private String buildRecapPrompt(int season, int week,
+                                    List<java.util.Map<String, Object>> outcomes,
+                                    List<java.util.Map<String, Object>> standings,
+                                    long aliveCount, boolean seasonFinale) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Season ").append(season).append(", Week ").append(week)
+          .append(" is complete. Write the Week ").append(week).append(" recap.\n");
+        if (seasonFinale) {
+            sb.append("THIS IS THE SEASON FINALE — ");
+            sb.append(aliveCount == 1 ? "exactly one survivor remains. Crown the champion.\n"
+                    : aliveCount == 0 ? "nobody survived. A full wipeout — mourn accordingly.\n"
+                    : "the Super Bowl week recap closes the season.\n");
+        }
+
+        sb.append("\n=== THIS WEEK'S PICKS & RESULTS ===\n");
+        for (java.util.Map<String, Object> o : outcomes) {
+            String selected = (String) o.get("selectedTeam");
+            String home = (String) o.get("homeTeamName");
+            String away = (String) o.get("awayTeamName");
+            int homeScore = (Integer) o.get("homeScore");
+            int awayScore = (Integer) o.get("awayScore");
+            String status = (String) o.get("status");
+            boolean isFinal = "STATUS_FINAL".equals(status) || "Final".equals(status) || "F/OT".equals(status);
+
+            String result;
+            if (!isFinal) {
+                result = "NOT FINAL";
+            } else if (homeScore == awayScore) {
+                result = "TIE (counts as a LOSS)";
+            } else {
+                boolean pickedHome = selected != null && selected.equals(home);
+                boolean homeWon = homeScore > awayScore;
+                result = (pickedHome == homeWon) ? "WIN" : "LOSS";
+            }
+            sb.append(o.get("firstName")).append(" (").append(o.get("username")).append(") took ")
+              .append(selected).append(" — ").append(away).append(" ").append(awayScore)
+              .append(" @ ").append(home).append(" ").append(homeScore)
+              .append(" -> ").append(result).append("\n");
+        }
+
+        sb.append("\n=== SEASON STANDINGS (after this week) ===\n");
+        for (java.util.Map<String, Object> s : standings) {
+            int remaining = (Integer) s.get("remaining");
+            sb.append(s.get("firstName")).append(" (").append(s.get("username")).append("): ")
+              .append(remaining).append(" of ").append(s.get("initialPicks"))
+              .append(" picks left").append(remaining == 0 ? " — ELIMINATED" : "").append("\n");
+        }
+        sb.append("\nSurvivors still alive: ").append(aliveCount).append("\n");
+        sb.append("\nWrite the recap now.");
         return sb.toString();
     }
 

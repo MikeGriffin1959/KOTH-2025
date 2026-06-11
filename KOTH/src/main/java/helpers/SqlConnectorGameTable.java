@@ -16,7 +16,34 @@ public class SqlConnectorGameTable {
 	@Autowired
 	private DataSource dataSource;
 
-    
+    /**
+     * True when the week has at least one game and every game is final.
+     * Backs CommentaryScheduler.isLastGameOfWeekFinal (Commentary M2).
+     * Matches the raw ESPN STATUS_FINAL plus the legacy friendly forms
+     * (same forgiveness as CommonProcessingService.isWinningPick).
+     */
+    public boolean isWeekComplete(int season, int week) {
+        String sql = "SELECT COUNT(*) AS total, " +
+                     "SUM(CASE WHEN status IN ('STATUS_FINAL','Final','F/OT') THEN 1 ELSE 0 END) AS finals " +
+                     "FROM KOTH.Game WHERE season = ? AND week = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, week);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    int total = rs.getInt("total");
+                    int finals = rs.getInt("finals");
+                    return total > 0 && finals == total;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorGameTable.isWeekComplete - Error: " + e.getMessage());
+        }
+        return false;
+    }
+
+
     //Method to create schedule data (ScheduleCreator)
     public void storeGameDataInSQLTable(List<Game> games) {
         System.out.println("SqlConnectorGameTable.storeGameDataInSQLTable method started");
