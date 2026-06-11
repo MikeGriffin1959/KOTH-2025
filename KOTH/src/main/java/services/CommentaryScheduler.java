@@ -7,18 +7,28 @@ import org.springframework.stereotype.Service;
 import helpers.SqlConnectorCommentaryTable;
 import helpers.SqlConnectorGameTable;
 import helpers.SqlConnectorPicksPriceTable;
+import model.Game;
 import model.PicksPrice;
+import model.RaceEvent;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Commentary scheduler (M2) — the first @Scheduled background job in KOTH
- * (@EnableScheduling already lives in config/AppConfig). Wakes every
- * commentary.scheduler.tickMs (default 60s) and, when the week's last game
- * goes final, fires the Week Recap exactly once.
+ * Commentary scheduler — the first @Scheduled background job in KOTH
+ * (@EnableScheduling already lives in config/AppConfig).
  *
- * Designed so an idle tick is cheap: one picksprice read, one game-table
- * count. M3 adds live-event detection to this tick; M4 adds preview/reveal.
+ * M2: every commentary.scheduler.tickMs (60s default), fire the Week Recap
+ *     once when the week's last game goes final.
+ * M3: during the game window, refresh live scores from ESPN and run the
+ *     EventDetector; a second 30s tick adds fidelity during two-minute drills
+ *     (Q4/OT, clock <= 2:00) for LATE_DRAMA, per design §7.
+ *
+ * Idle ticks are cheap: one picksprice read + one game-table read. All
+ * generation is deduped against the commentary table, so overlapping ticks
+ * (60s + 30s share Spring's single-threaded scheduler anyway) cannot
+ * double-generate.
  */
 @Service
 public class CommentaryScheduler {
@@ -38,6 +48,12 @@ public class CommentaryScheduler {
     @Autowired
     private NFLSeasonCalculator nflSeasonCalculator;
 
+    @Autowired
+    private EventDetector eventDetector;
+
+    @Autowired
+    private NFLGameFetcherService nflGameFetcherService;
+
     @Scheduled(fixedRateString = "${commentary.scheduler.tickMs:60000}")
     public void tick() {
         try {
@@ -48,16 +64,23 @@ public class CommentaryScheduler {
             if (prices.isEmpty() || !prices.get(0).isCommentaryEnabled()) {
                 return;
             }
+            PicksPrice cfg = prices.get(0);
 
             int currentWeek = nflSeasonCalculator.getCurrentNFLWeekNumber();
             if (currentWeek < 1) {
                 return; // offseason / pre-week-1
             }
 
-            // Week Recap: once, after the last game of the week is final.
-            // Also look at the previous week — if the calculator rolls to the
-            // next week right after MNF, the just-finished week still gets its
-            // recap (hasCommentary makes this idempotent).
+            // M3: live events — refresh scores + detect during the game window.
+            List<Map<String, Object>> gameStates = commentaryTable.getWeekGameStates(season, currentWeek);
+            if (isGameWindow(gameStates)) {
+                refreshLiveScores();
+                runEventDetection(season, currentWeek, cfg);
+            }
+
+            // M2: Week Recap — once, after the last game of the week is final.
+            // Also look at the previous week so a recap is never missed if the
+            // calculator rolls right after MNF (hasCommentary = idempotent).
             for (int week = Math.max(1, currentWeek - 1); week <= currentWeek; week++) {
                 if (!gameTable.isWeekComplete(season, week)) {
                     continue;
@@ -75,6 +98,120 @@ public class CommentaryScheduler {
             // Never let one bad tick kill the schedule
             System.err.println("CommentaryScheduler.tick - error (will retry next tick): " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * Tighter 30s cadence for LATE_DRAMA fidelity (design §7): no-ops unless a
+     * live game is inside the two-minute warning of Q4/OT.
+     */
+    @Scheduled(fixedRate = 30000)
+    public void tickLateDrama() {
+        try {
+            int season = nflSeasonCalculator.getCurrentNFLSeason();
+            List<PicksPrice> prices = picksPriceTable.getPickPrices(season);
+            if (prices.isEmpty() || !prices.get(0).isCommentaryEnabled()) {
+                return;
+            }
+            int week = nflSeasonCalculator.getCurrentNFLWeekNumber();
+            if (week < 1) return;
+
+            List<Map<String, Object>> gameStates = commentaryTable.getWeekGameStates(season, week);
+            if (!anyTwoMinuteDrill(gameStates)) {
+                return;
+            }
+            System.out.println("CommentaryScheduler.tickLateDrama - two-minute drill in progress, tight check");
+            refreshLiveScores();
+            runEventDetection(season, week, prices.get(0));
+        } catch (Exception e) {
+            System.err.println("CommentaryScheduler.tickLateDrama - error: " + e.getMessage());
+        }
+    }
+
+    // ── M3 internals ───────────────────────────────────────────
+
+    /** Detect events and generate commentary for any not yet covered (idx_dedupe). */
+    private void runEventDetection(int season, int week, PicksPrice cfg) {
+        List<RaceEvent> events = eventDetector.detect(season, week, cfg.getSnarkLevel());
+        for (RaceEvent ev : events) {
+            // Once per (week, game, eventType)
+            if (commentaryTable.findByDedupeKey(season, cfg.getKothSeason(), week, ev.getGameId(), ev.getType().name())) {
+                continue;
+            }
+            // GAME_FINAL_WIN is suppressed if LATE_DRAMA already covered the game
+            if (ev.getType() == RaceEvent.EventType.GAME_FINAL_WIN
+                    && commentaryTable.findByDedupeKey(season, cfg.getKothSeason(), week, ev.getGameId(),
+                            RaceEvent.EventType.LATE_DRAMA.name())) {
+                continue;
+            }
+            boolean generated = commentaryService.generateEventCommentary(season, week, ev);
+            System.out.println("CommentaryScheduler - event " + ev.getType() + " gameId=" + ev.getGameId()
+                    + " -> " + (generated ? "generated" : "skipped/failed"));
+        }
+    }
+
+    /** Pull fresh scores from ESPN into the game table (same path HomeServlet uses). */
+    private void refreshLiveScores() {
+        try {
+            List<Game> games = nflGameFetcherService.fetchCurrentWeekGames();
+            gameTable.updateGameTableMinimal(games);
+        } catch (Exception e) {
+            // Non-fatal: detection still runs against the last-known DB state
+            System.err.println("CommentaryScheduler.refreshLiveScores - ESPN refresh failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * The game window is open when any game is live, or a scheduled game's
+     * kickoff time (ISO-8601 UTC string) has passed but the DB hasn't seen it
+     * start yet (i.e. scores need refreshing).
+     */
+    private boolean isGameWindow(List<Map<String, Object>> gameStates) {
+        Instant now = Instant.now();
+        for (Map<String, Object> g : gameStates) {
+            String status = (String) g.get("status");
+            if (EventDetector.isLive(status)) {
+                return true;
+            }
+            if ("STATUS_SCHEDULED".equals(status) || "Scheduled".equals(status)) {
+                Instant kickoff = parseKickoff((String) g.get("date"));
+                if (kickoff != null && !kickoff.isAfter(now)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Any live game inside 2:00 of Q4 or OT? */
+    private boolean anyTwoMinuteDrill(List<Map<String, Object>> gameStates) {
+        for (Map<String, Object> g : gameStates) {
+            if (!EventDetector.isLive((String) g.get("status"))) continue;
+            int periodNum = EventDetector.parseIntSafe((String) g.get("period"));
+            int clock = EventDetector.parseClockSeconds((String) g.get("displayClock"));
+            if (periodNum >= 4 && clock >= 0 && clock <= 120) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * game.date is an ISO-8601 UTC string like "2026-09-10T00:20Z" — note it
+     * carries minutes only. Instant.parse requires seconds, so normalize the
+     * minutes-only form to "...T00:20:00Z" before parsing.
+     */
+    private Instant parseKickoff(String date) {
+        if (date == null || date.isEmpty()) return null;
+        String d = date.trim();
+        if (d.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}Z")) {
+            d = d.substring(0, d.length() - 1) + ":00Z";
+        }
+        try {
+            return Instant.parse(d);
+        } catch (Exception e) {
+            System.err.println("CommentaryScheduler.parseKickoff - unparseable date '" + date + "'");
+            return null;
         }
     }
 }

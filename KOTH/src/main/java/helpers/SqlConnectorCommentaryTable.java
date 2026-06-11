@@ -247,6 +247,82 @@ public class SqlConnectorCommentaryTable {
         return rows;
     }
 
+    /**
+     * Detector feed (M3): one row per pick for the week with live game state.
+     * Reads the RAW game team-name columns (which picks.selectedTeam matches),
+     * not the Teams-join short names.
+     * Keys: idUser, username, firstName, selectedTeam, gameId, homeTeamName,
+     *       awayTeamName, homeScore, awayScore, status, period, displayClock,
+     *       pointSpread (nullable Double, home-relative)
+     */
+    public List<java.util.Map<String, Object>> getWeekPicksWithGameState(int season, int week) {
+        List<java.util.Map<String, Object>> rows = new ArrayList<>();
+        String sql = "SELECT u.idUser, u.username, u.firstName, p.selectedTeam, g.GameID, " +
+                     "g.homeTeamName, g.awayTeamName, g.homeScore, g.awayScore, " +
+                     "g.status, g.period, g.displayClock, g.pointSpread " +
+                     "FROM KOTH.Picks p " +
+                     "JOIN KOTH.User u ON u.idUser = p.userId " +
+                     "JOIN KOTH.Game g ON g.GameID = p.gameId " +
+                     "WHERE p.season = ? AND p.week = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, week);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> row = new java.util.HashMap<>();
+                    row.put("idUser", rs.getInt("idUser"));
+                    row.put("username", rs.getString("username"));
+                    row.put("firstName", rs.getString("firstName"));
+                    row.put("selectedTeam", rs.getString("selectedTeam"));
+                    row.put("gameId", rs.getInt("GameID"));
+                    row.put("homeTeamName", rs.getString("homeTeamName"));
+                    row.put("awayTeamName", rs.getString("awayTeamName"));
+                    row.put("homeScore", rs.getInt("homeScore"));
+                    row.put("awayScore", rs.getInt("awayScore"));
+                    row.put("status", rs.getString("status"));
+                    row.put("period", rs.getString("period"));
+                    row.put("displayClock", rs.getString("displayClock"));
+                    double spread = rs.getDouble("pointSpread");
+                    row.put("pointSpread", rs.wasNull() ? null : spread);
+                    rows.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorCommentaryTable.getWeekPicksWithGameState - Error: " + e.getMessage());
+        }
+        return rows;
+    }
+
+    /**
+     * Lightweight per-game state for the week (ALL games, picked or not):
+     * used for the game-window check and LAST_STAND's "only one game left".
+     * Keys: gameId, status, date (ISO-8601 UTC string), period, displayClock
+     */
+    public List<java.util.Map<String, Object>> getWeekGameStates(int season, int week) {
+        List<java.util.Map<String, Object>> rows = new ArrayList<>();
+        String sql = "SELECT GameID, status, date, period, displayClock FROM KOTH.Game WHERE season = ? AND week = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, week);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> row = new java.util.HashMap<>();
+                    row.put("gameId", rs.getInt("GameID"));
+                    row.put("status", rs.getString("status"));
+                    row.put("date", rs.getString("date"));
+                    row.put("period", rs.getString("period"));
+                    row.put("displayClock", rs.getString("displayClock"));
+                    rows.add(row);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorCommentaryTable.getWeekGameStates - Error: " + e.getMessage());
+        }
+        return rows;
+    }
+
     private static final String SELECT_COLUMNS =
             "commentaryId, season, kothSeason, week, streamType, eventType, affectedUserIds, "
             + "gameId, snarkLevel, promptTokens, responseTokens, body, createdAt";

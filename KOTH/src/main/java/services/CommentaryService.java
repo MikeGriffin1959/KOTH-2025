@@ -291,6 +291,62 @@ public class CommentaryService {
     }
 
     /**
+     * Generate live event commentary for one detected RaceEvent (M3) and
+     * persist it (streamType=EVENT). Dedupe against idx_dedupe is the
+     * scheduler's job (findByDedupeKey before calling). The persisted row
+     * flows through sendCommentarySms → COMMENTARY_EVENT texts.
+     */
+    public boolean generateEventCommentary(int season, int week, model.RaceEvent event) {
+        System.out.println("CommentaryService.generateEventCommentary: " + event);
+
+        List<PicksPrice> prices = picksPriceTable.getPickPrices(season);
+        if (prices.isEmpty()) return false;
+        PicksPrice cfg = prices.get(0);
+        if (!cfg.isCommentaryEnabled() || !isConfigured() || dailyCostCapExceeded()) {
+            return false;
+        }
+
+        int snarkLevel = cfg.getSnarkLevel();
+        String systemPrompt = buildSystemPrompt(snarkLevel, "EVENT");
+        String userPrompt = buildEventPrompt(season, week, event);
+
+        ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
+        if (result == null || result.text == null || result.text.isEmpty()) {
+            System.err.println("CommentaryService.generateEventCommentary - empty/failed API response");
+            return false;
+        }
+
+        StringBuilder ids = new StringBuilder();
+        for (Integer id : event.getAffectedUserIds()) {
+            if (ids.length() > 0) ids.append(",");
+            ids.append(id);
+        }
+
+        Commentary commentary = new Commentary();
+        commentary.setSeason(season);
+        commentary.setKothSeason(cfg.getKothSeason());
+        commentary.setWeek(week);
+        commentary.setStreamType("EVENT");
+        commentary.setEventType(event.getType().name());
+        commentary.setAffectedUserIds(ids.toString());
+        commentary.setGameId(event.getGameId());
+        commentary.setSnarkLevel(snarkLevel);
+        commentary.setPromptTokens(result.promptTokens);
+        commentary.setResponseTokens(result.responseTokens);
+        commentary.setBody(result.text);
+
+        if (!commentaryTable.insert(commentary)) {
+            System.err.println("CommentaryService.generateEventCommentary - persist failed");
+            return false;
+        }
+
+        sendCommentarySms(commentary, cfg);
+        System.out.println("CommentaryService.generateEventCommentary - persisted commentaryId="
+                + commentary.getCommentaryId() + " (" + event.getType() + ")");
+        return true;
+    }
+
+    /**
      * True if today's accumulated token spend (across all streams) is at or above
      * the configured daily cap, applying current Sonnet 4.6 pricing. Used as a
      * circuit-breaker before any generation call. Fails open (returns false) only
@@ -362,6 +418,12 @@ public class CommentaryService {
 
         // Per-stream output format
         switch (streamType) {
+            case "EVENT":
+                sb.append("FORMAT: Breaking-news reactive commentary. Something just happened in a live ");
+                sb.append("game (or one just went final) and survivor fates moved. React to THIS MOMENT — ");
+                sb.append("do not summarize the whole week. Think of a sportscaster calling a highlight: ");
+                sb.append("short, punchy, vivid. 1-2 sentences.\n\n");
+                break;
             case "RECAP":
                 sb.append("FORMAT: Week Recap — look back at the week that just ended and set up the next one. ");
                 sb.append("Cover who survived, who lost picks, and any eliminations (sympathetically, per the rules). ");
@@ -433,6 +495,20 @@ public class CommentaryService {
         }
         sb.append("\nSurvivors still alive: ").append(aliveCount).append("\n");
         sb.append("\nWrite the recap now.");
+        return sb.toString();
+    }
+
+    /** EVENT user prompt (M3): the detected moment, focused — not a race summary. */
+    private String buildEventPrompt(int season, int week, model.RaceEvent event) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Season ").append(season).append(", Week ").append(week)
+          .append(". LIVE EVENT — type: ").append(event.getType().name()).append("\n\n");
+        sb.append("WHAT JUST HAPPENED:\n").append(event.getDescription()).append("\n\n");
+        if (event.getType() == model.RaceEvent.EventType.ELIMINATION) {
+            sb.append("Remember: ELIMINATION is sympathetic at every snark level. ");
+            sb.append("Warm sendoff, no mockery, no Woof.\n\n");
+        }
+        sb.append("Write the ").append(event.getType().name()).append(" commentary now (1-2 sentences).");
         return sb.toString();
     }
 
