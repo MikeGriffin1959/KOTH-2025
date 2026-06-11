@@ -398,7 +398,7 @@
 
                         <div class="form-check mb-3">
                             <input type="checkbox" class="form-check-input" id="commentaryNotificationsCheck">
-                            <label class="form-check-label" for="commentaryNotificationsCheck">Notifications (SMS &mdash; coming soon)</label>
+                            <label class="form-check-label" for="commentaryNotificationsCheck">Text Notifications (Recap &amp; Live Commentary)</label>
                         </div>
 
                         <div class="form-group mb-3">
