@@ -30,6 +30,21 @@ public class EmailService {
         mailSender.send(message);
     }
 
+    public void sendEmailVerificationEmail(String to, String verificationLink) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+        helper.setFrom(senderEmail);
+        helper.setTo(to);
+        helper.setSubject("KOTH - Verify your email address");
+        helper.setText("<h3>Welcome to KOTH!</h3>"
+                + "<p>Please verify your email address by clicking the link below:</p>"
+                + "<a href='" + verificationLink + "'>Verify Email</a>"
+                + "<p>If you did not create a KOTH account, you can ignore this email.</p>", true);
+
+        mailSender.send(message);
+    }
+
     public void sendUsernameRecoveryEmail(String to, String username) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");

@@ -89,15 +89,40 @@
                 >
             </div>
             <div class="form-group">
-                <label for="cellNumber">Cell Number</label>
-                <input type="tel" 
-                       class="form-control" 
-                       id="cellNumber" 
-                       name="cellNumber" 
-                       maxlength="20" 
+                <label for="cellNumber">Cell Number <span class="text-danger">*</span></label>
+                <input type="tel"
+                       class="form-control"
+                       id="cellNumber"
+                       name="cellNumber"
+                       required
+                       maxlength="20"
                        placeholder="e.g., 123-456-7890"
                        value="<c:out value="${cellNumber}" />"
                 >
+                <!-- Phone verification (required before sign-up) -->
+                <div class="mt-2">
+                    <div id="verifyStep1">
+                        <small class="mb-1 d-block"><strong>Verification required:</strong> we'll text a code to this number.</small>
+                        <button type="button" class="btn btn-sm btn-outline-info" onclick="sendVerificationCode()" id="sendCodeBtn">
+                            Send Verification Code
+                        </button>
+                        <div id="sendCodeResult" class="mt-1" style="display:none;"></div>
+                    </div>
+                    <div id="verifyStep2" style="display:none;">
+                        <small class="mb-1 d-block">Enter the 6-digit code sent to your phone:</small>
+                        <div class="d-flex align-items-center" style="gap:8px;">
+                            <input type="text" class="form-control" id="verifyCodeInput"
+                                   maxlength="6" placeholder="123456" pattern="[0-9]{6}" style="max-width:120px;">
+                            <button type="button" class="btn btn-sm btn-success" onclick="checkVerificationCode()" id="checkCodeBtn">
+                                Verify
+                            </button>
+                        </div>
+                        <div id="checkCodeResult" class="mt-1" style="display:none;"></div>
+                    </div>
+                    <div id="verifyDone" style="display:none;">
+                        <span class="badge badge-success">&#10003; Phone verified</span>
+                    </div>
+                </div>
             </div>
             <div class="form-group position-relative">
 			    <label for="password">Password</label>
@@ -217,17 +242,102 @@ function calculateTotalPrice(numberOfPicks) {
     return total.toFixed(2); // Format to 2 decimal places
 }
 
+// Phone verification state (server re-checks via session — this just gates the UI)
+var phoneVerified = false;
+var verifiedPhoneValue = '';
+
+function postSignup(params) {
+    return fetch('SignUpServlet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params
+    }).then(function(r){ return r.json(); });
+}
+function sendVerificationCode() {
+    var phone = document.getElementById('cellNumber').value.trim();
+    var resultDiv = document.getElementById('sendCodeResult');
+    if (!phone) {
+        resultDiv.innerHTML = '<small class="text-danger">Enter your cell number first</small>';
+        resultDiv.style.display = 'block';
+        return;
+    }
+    var btn = document.getElementById('sendCodeBtn');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    postSignup('action=sendVerificationCode&phone=' + encodeURIComponent(phone))
+        .then(function(data) {
+            resultDiv.innerHTML = '<small class="' + (data.success ? 'text-success' : 'text-danger') + '">' + data.message + '</small>';
+            resultDiv.style.display = 'block';
+            if (data.success) {
+                document.getElementById('verifyStep1').style.display = 'none';
+                document.getElementById('verifyStep2').style.display = 'block';
+            } else {
+                btn.disabled = false; btn.textContent = 'Send Verification Code';
+            }
+        })
+        .catch(function(e) {
+            resultDiv.innerHTML = '<small class="text-danger">Error: ' + e.message + '</small>';
+            resultDiv.style.display = 'block';
+            btn.disabled = false; btn.textContent = 'Send Verification Code';
+        });
+}
+function checkVerificationCode() {
+    var phone = document.getElementById('cellNumber').value.trim();
+    var code = document.getElementById('verifyCodeInput').value.trim();
+    var resultDiv = document.getElementById('checkCodeResult');
+    if (!/^[0-9]{6}$/.test(code)) {
+        resultDiv.innerHTML = '<small class="text-danger">Enter the 6-digit code</small>';
+        resultDiv.style.display = 'block';
+        return;
+    }
+    var btn = document.getElementById('checkCodeBtn');
+    btn.disabled = true; btn.textContent = 'Checking…';
+    postSignup('action=checkVerificationCode&phone=' + encodeURIComponent(phone) + '&code=' + encodeURIComponent(code))
+        .then(function(data) {
+            resultDiv.innerHTML = '<small class="' + (data.success ? 'text-success' : 'text-danger') + '">' + data.message + '</small>';
+            resultDiv.style.display = 'block';
+            if (data.success) {
+                phoneVerified = true;
+                verifiedPhoneValue = phone;
+                document.getElementById('verifyStep1').style.display = 'none';
+                document.getElementById('verifyStep2').style.display = 'none';
+                document.getElementById('verifyDone').style.display = 'block';
+            } else {
+                btn.disabled = false; btn.textContent = 'Verify';
+            }
+        })
+        .catch(function(e) {
+            resultDiv.innerHTML = '<small class="text-danger">Error: ' + e.message + '</small>';
+            resultDiv.style.display = 'block';
+            btn.disabled = false; btn.textContent = 'Verify';
+        });
+}
+// Changing the number after verifying requires re-verification
+document.getElementById('cellNumber').addEventListener('input', function() {
+    if (phoneVerified && this.value.trim() !== verifiedPhoneValue) {
+        phoneVerified = false;
+        document.getElementById('verifyDone').style.display = 'none';
+        var btn = document.getElementById('sendCodeBtn');
+        btn.disabled = false; btn.textContent = 'Send Verification Code';
+        document.getElementById('verifyStep1').style.display = 'block';
+        document.getElementById('verifyStep2').style.display = 'none';
+    }
+});
+
 // Form submission handler
 document.getElementById('signUpForm').addEventListener('submit', function(event) {
     event.preventDefault();
     var password = document.getElementById("password").value.trim();
     var reenterPassword = document.getElementById("reenterPassword").value.trim();
-    
+
     if (password !== reenterPassword) {
         alert("Passwords do not match.");
         return;
     }
-    
+    if (!phoneVerified) {
+        alert("Please verify your cell number before signing up (use the Send Verification Code button).");
+        return;
+    }
+
     this.submit();
 });
 

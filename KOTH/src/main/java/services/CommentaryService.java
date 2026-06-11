@@ -69,6 +69,12 @@ public class CommentaryService {
     @Autowired
     private SqlConnectorPicksPriceTable picksPriceTable;
 
+    @Autowired
+    private SmsService smsService; // commentary → SMS push
+
+    @Autowired
+    private helpers.SmsPreferencesDAO smsPreferencesDAO; // claim() dedupe
+
     // ════════════════════════════════════════════════════════════
     // PUBLIC API
     // ════════════════════════════════════════════════════════════
@@ -148,9 +154,78 @@ public class CommentaryService {
             return TestResult.fail("Generated commentary but failed to persist it (check server logs)");
         }
 
+        // SMS push (no-op for TEST, but proves the wiring all streams flow through)
+        sendCommentarySms(commentary, cfg);
+
         System.out.println("CommentaryService.generateTestCommentary - persisted commentaryId=" + commentary.getCommentaryId()
                 + " (" + result.promptTokens + " in / " + result.responseTokens + " out tokens)");
         return new TestResult(true, "Test commentary generated", result.text, commentary.getCommentaryId());
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // COMMENTARY → SMS (mirrors GolferFest's CommentaryService SMS wiring)
+    // ════════════════════════════════════════════════════════════
+
+    /**
+     * Push a just-persisted commentary to opted-in players by text. Every
+     * generation path (M2+ recaps/events included) should call this after
+     * inserting the row. Behavior:
+     *  - gated on the season's commentaryNotifications toggle (commissioner card)
+     *  - RECAP  → WEEK_RECAP recipients (once per week, claim()-deduped)
+     *  - EVENT  → COMMENTARY_EVENT recipients (deduped per event/game)
+     *  - TEST / PREVIEW / REVEAL → no SMS
+     *  - non-fatal: SMS failure never breaks commentary generation
+     */
+    private void sendCommentarySms(Commentary commentary, PicksPrice cfg) {
+        try {
+            if (cfg == null || !cfg.isCommentaryNotifications() || !smsService.isConfigured()) {
+                return;
+            }
+            int season = commentary.getSeason();
+            int week = commentary.getWeek();
+
+            switch (commentary.getStreamType()) {
+                case "RECAP": {
+                    if (smsPreferencesDAO.claim(season, week, "WEEK_RECAP", "recap")) {
+                        String body = "[KOTH] Week " + week + " recap: "
+                                + smsSnippet(commentary.getBody(), 360)
+                                + " Full story on the Commentary page.";
+                        smsService.broadcastToSeason(model.SmsNotificationType.WEEK_RECAP,
+                                season, false, body);
+                    }
+                    break;
+                }
+                case "EVENT": {
+                    String refKey = (commentary.getEventType() != null ? commentary.getEventType() : "EVENT")
+                            + ":" + (commentary.getGameId() != null ? commentary.getGameId() : 0)
+                            + ":" + (commentary.getAffectedUserIds() != null ? commentary.getAffectedUserIds() : "");
+                    if (smsPreferencesDAO.claim(season, week, "COMMENTARY_EVENT", refKey)) {
+                        String body = "[KOTH] " + smsSnippet(commentary.getBody(), 360);
+                        smsService.broadcastToSeason(model.SmsNotificationType.COMMENTARY_EVENT,
+                                season, false, body);
+                    }
+                    break;
+                }
+                default:
+                    // TEST, PREVIEW, REVEAL: page-only, no texts
+                    break;
+            }
+        } catch (Exception smsEx) {
+            System.err.println("CommentaryService.sendCommentarySms - SMS failed (non-fatal): " + smsEx.getMessage());
+        }
+    }
+
+    /**
+     * Collapse whitespace and truncate commentary at a word boundary so it fits
+     * in a reasonable SMS (a few segments at most).
+     */
+    private String smsSnippet(String text, int maxChars) {
+        if (text == null) return "";
+        String flat = text.replaceAll("\\s+", " ").trim();
+        if (flat.length() <= maxChars) return flat;
+        int cut = flat.lastIndexOf(' ', maxChars);
+        if (cut < maxChars / 2) cut = maxChars;
+        return flat.substring(0, cut) + "...";
     }
 
     /**

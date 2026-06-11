@@ -35,6 +35,9 @@ public class UpdateUserInfoServlet {
     private SmsPreferencesDAO smsPreferencesDAO; // SMS feature
 
     @Autowired
+    private services.EmailVerificationService emailVerificationService; // Email verification
+
+    @Autowired
     public UpdateUserInfoServlet(SqlConnectorUserTable sqlConnectorUserTable) {
         this.sqlConnectorUserTable = sqlConnectorUserTable;
     }
@@ -101,6 +104,10 @@ public class UpdateUserInfoServlet {
             handleUpdateSmsPrefs(request, redirectAttributes, currentUserName);
             return "redirect:/UpdateUserInfoServlet";
         }
+        if ("resendVerificationEmail".equals(action)) {
+            handleResendVerificationEmail(response, currentUserName);
+            return null;
+        }
 
         String firstName = request.getParameter("firstName");
         String lastName = request.getParameter("lastName");
@@ -128,6 +135,9 @@ public class UpdateUserInfoServlet {
                 && existing.getCellNumber() != null
                 && !PhoneVerificationService.normalizePhoneNumber(existing.getCellNumber())
                         .equals(PhoneVerificationService.normalizePhoneNumber(cellNumber));
+        // Same for the email address.
+        boolean emailChanged = existing != null && existing.getEmail() != null
+                && !existing.getEmail().equalsIgnoreCase(email.trim());
 
         // ✅ Update user info in DB
         boolean isUpdated = sqlConnectorUserTable.updateUserInfo(currentUserName, firstName, lastName, userName, email, cellNumber);
@@ -137,9 +147,20 @@ public class UpdateUserInfoServlet {
                 smsPreferencesDAO.clearPhoneVerification(existing.getIdUser());
                 System.out.println("UpdateUserInfoServlet: cell number changed — cleared phone verification for user " + existing.getIdUser());
             }
+            if (emailChanged) {
+                sqlConnectorUserTable.clearEmailVerification(existing.getIdUser());
+                try {
+                    existing.setEmail(email.trim());
+                    emailVerificationService.initiateEmailVerification(existing);
+                } catch (Exception mailEx) {
+                    System.err.println("UpdateUserInfoServlet: verification email failed (non-fatal): " + mailEx.getMessage());
+                }
+                System.out.println("UpdateUserInfoServlet: email changed — verification cleared, new link sent for user " + existing.getIdUser());
+            }
             session.setAttribute("userName", userName);
             redirectAttributes.addFlashAttribute("message", "User information updated successfully."
-                    + (phoneChanged ? " Your new number needs to be re-verified for text messages." : ""));
+                    + (phoneChanged ? " Your new number needs to be re-verified for text messages." : "")
+                    + (emailChanged ? " A verification link was sent to your new email address." : ""));
             redirectAttributes.addFlashAttribute("messageType", "success");
         } else {
             redirectAttributes.addFlashAttribute("message", "Failed to update user information. Please try again.");
@@ -224,6 +245,28 @@ public class UpdateUserInfoServlet {
             System.err.println("UpdateUserInfoServlet.handleUpdateSmsPrefs - Error: " + e.getMessage());
             redirectAttributes.addFlashAttribute("message", "Failed to save preferences.");
             redirectAttributes.addFlashAttribute("messageType", "error");
+        }
+    }
+
+    private void handleResendVerificationEmail(HttpServletResponse response, String currentUserName) throws IOException {
+        response.setContentType("application/json");
+        try {
+            User user = sqlConnectorUserTable.getUserByUsername(currentUserName);
+            if (user == null) {
+                writeJson(response, false, "User not found");
+                return;
+            }
+            if (user.isEmailVerified()) {
+                writeJson(response, false, "Your email is already verified");
+                return;
+            }
+            boolean sent = emailVerificationService.initiateEmailVerification(user);
+            writeJson(response, sent,
+                    sent ? "Verification link sent to " + user.getEmail()
+                         : "Could not send the verification email — try again later");
+        } catch (Exception e) {
+            System.err.println("UpdateUserInfoServlet.handleResendVerificationEmail - Error: " + e.getMessage());
+            writeJson(response, false, "Error: " + e.getMessage());
         }
     }
 

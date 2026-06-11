@@ -134,7 +134,7 @@ public class SqlConnectorUserTable {
         System.out.println("SqlConnectorUserTable.GetAllUsersForSeason method called");
         List<User> users = new ArrayList<>();
         String sql = "SELECT DISTINCT u.idUser, u.firstName, u.lastName, u.username, u.email, " +
-                     "u.commish, u.picksPaid, u.initialPicks, u.cellNumber, u.phoneVerified " +
+                     "u.commish, u.picksPaid, u.initialPicks, u.cellNumber, u.phoneVerified, u.emailVerified " +
                      "FROM KOTH.User u " +
                      "WHERE u.picksSeason = ? " +
                      "ORDER BY u.lastName";
@@ -158,6 +158,7 @@ public class SqlConnectorUserTable {
                     user.setInitialPicks(resultSet.getInt("initialPicks"));
                     user.setCellNumber(resultSet.getString("cellNumber"));
                     user.setPhoneVerified(resultSet.getBoolean("phoneVerified"));
+                    user.setEmailVerified(resultSet.getBoolean("emailVerified"));
                     user.setPicksSeason(season);
 
                     // Debug logging
@@ -215,7 +216,7 @@ public class SqlConnectorUserTable {
     // Get user info by username instead of userID (UpdateUserInfo Servlet)
     public User getUserByUsername(String username) {
         System.out.println("SqlConnectorUserTable.getUserByUsername method called");
-        String sql = "SELECT idUser, firstName, lastName, userName, email, cellNumber, phoneVerified FROM KOTH.User WHERE userName = ?";
+        String sql = "SELECT idUser, firstName, lastName, userName, email, cellNumber, phoneVerified, emailVerified FROM KOTH.User WHERE userName = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
@@ -230,6 +231,7 @@ public class SqlConnectorUserTable {
                     user.setEmail(resultSet.getString("email"));
                     user.setCellNumber(resultSet.getString("cellNumber"));
                     user.setPhoneVerified(resultSet.getBoolean("phoneVerified"));
+                    user.setEmailVerified(resultSet.getBoolean("emailVerified"));
                     return user;
                 }
             }
@@ -688,6 +690,79 @@ public class SqlConnectorUserTable {
     }
     public LoginResult authenticateUser(String username, String password) {
         return isValidUser(username, password);
+    }
+
+    // ── Email verification (ported from GolferFest) ───────────────────────
+
+    public boolean setEmailVerifyToken(int userId, String token) {
+        String sql = "UPDATE KOTH.User SET emailVerifyToken = ? WHERE idUser = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, token);
+            ps.setInt(2, userId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorUserTable.setEmailVerifyToken - Error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public void clearEmailVerifyToken(int userId) {
+        String sql = "UPDATE KOTH.User SET emailVerifyToken = NULL WHERE idUser = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorUserTable.clearEmailVerifyToken - Error: " + e.getMessage());
+        }
+    }
+
+    public User getUserByEmailVerifyToken(String token) {
+        String sql = "SELECT idUser, firstName, lastName, userName, email FROM KOTH.User WHERE emailVerifyToken = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, token);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    User user = new User();
+                    user.setIdUser(rs.getInt("idUser"));
+                    user.setFirstName(rs.getString("firstName"));
+                    user.setLastName(rs.getString("lastName"));
+                    user.setUsername(rs.getString("userName"));
+                    user.setEmail(rs.getString("email"));
+                    return user;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorUserTable.getUserByEmailVerifyToken - Error: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public boolean markEmailVerified(int userId) {
+        String sql = "UPDATE KOTH.User SET emailVerified = 1, emailVerifiedDate = NOW(), " +
+                     "emailVerifyToken = NULL WHERE idUser = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorUserTable.markEmailVerified - Error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public void clearEmailVerification(int userId) {
+        String sql = "UPDATE KOTH.User SET emailVerified = 0, emailVerifiedDate = NULL, " +
+                     "emailVerifyToken = NULL WHERE idUser = ?";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorUserTable.clearEmailVerification - Error: " + e.getMessage());
+        }
     }
 
 }

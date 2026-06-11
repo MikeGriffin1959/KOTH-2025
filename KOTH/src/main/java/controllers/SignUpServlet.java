@@ -1,6 +1,7 @@
 package controllers;
 
 import services.PasswordValidator;
+import helpers.SmsPreferencesDAO;
 import helpers.SqlConnectorPicksPriceTable;
 import helpers.SqlConnectorUserTable;
 import model.PicksPrice;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import services.CommonProcessingService;
+import services.EmailVerificationService;
+import services.PhoneVerificationService;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,15 +23,29 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.util.Calendar;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Controller
 public class SignUpServlet {
+
+    /** Session attribute remembering which phone was verified pre-signup. */
+    private static final String VERIFIED_PHONE_ATTR = "signupVerifiedPhone";
+    private static final Pattern E164_PATTERN = Pattern.compile("^\\+[1-9]\\d{9,14}$");
 
     private final SqlConnectorUserTable sqlConnectorUserTable;
     private final SqlConnectorPicksPriceTable sqlConnectorPicksPriceTable;
 
     @Autowired
     private CommonProcessingService commonProcessingService; // ✅ Added for cache refresh
+
+    @Autowired
+    private PhoneVerificationService phoneVerificationService; // SMS verification at signup
+
+    @Autowired
+    private SmsPreferencesDAO smsPreferencesDAO; // persist verification + seed prefs
+
+    @Autowired
+    private EmailVerificationService emailVerificationService; // email link at signup
 
     @Autowired
     public SignUpServlet(SqlConnectorUserTable sqlConnectorUserTable,
@@ -71,6 +88,17 @@ public class SignUpServlet {
             throws ServletException, IOException {
         System.out.println("SignUpServlet.doPost() called");
 
+        // AJAX phone-verification actions (mirrors GolferFest's signup flow)
+        String action = request.getParameter("action");
+        if ("sendVerificationCode".equals(action)) {
+            handleSendVerificationCode(request, response);
+            return null;
+        }
+        if ("checkVerificationCode".equals(action)) {
+            handleCheckVerificationCode(request, response);
+            return null;
+        }
+
         // Get form parameters
         String firstName = request.getParameter("firstName");
         String lastName = request.getParameter("lastName");
@@ -111,6 +139,19 @@ public class SignUpServlet {
                 return "signUp";
             }
 
+            // Phone must have been verified in this session (JS gates the button,
+            // but this is the authoritative server-side check).
+            String normalizedCell = PhoneVerificationService.normalizePhoneNumber(
+                    cellNumber != null ? cellNumber.trim() : null);
+            Object verifiedPhone = request.getSession(true).getAttribute(VERIFIED_PHONE_ATTR);
+            if (verifiedPhone == null || !verifiedPhone.equals(normalizedCell)) {
+                model.addAttribute("error",
+                        "Please verify your cell number before signing up "
+                        + "(use the Send Verification Code button).");
+                return "signUp";
+            }
+            cellNumber = normalizedCell; // store E.164
+
             // Get current season and parse initial picks
             int currentSeason = Calendar.getInstance().get(Calendar.YEAR);
             int initialPicks = Integer.parseInt(initialPicksStr);
@@ -131,6 +172,26 @@ public class SignUpServlet {
 
             // Add the user and get the generated ID
             int userId = sqlConnectorUserTable.addUser(user);
+
+            // Phone was verified pre-signup: persist + seed SMS prefs (non-fatal)
+            try {
+                smsPreferencesDAO.markPhoneVerified(userId, cellNumber);
+                smsPreferencesDAO.initializeDefaultPreferences(userId);
+                request.getSession().removeAttribute(VERIFIED_PHONE_ATTR);
+                System.out.println("SignUpServlet: user " + userId + " created phone-verified");
+            } catch (Exception smsEx) {
+                System.err.println("SignUpServlet: could not persist phone verification (non-fatal): "
+                        + smsEx.getMessage());
+            }
+
+            // Auto-send the email verification link (non-fatal)
+            try {
+                user.setIdUser(userId);
+                emailVerificationService.initiateEmailVerification(user);
+            } catch (Exception mailEx) {
+                System.err.println("SignUpServlet: verification email failed (non-fatal): "
+                        + mailEx.getMessage());
+            }
 
             // Create picks record
             User userPicks = new User();
@@ -171,6 +232,59 @@ public class SignUpServlet {
         }
 
         return "signUp";
+    }
+
+    // ── Signup phone-verification AJAX handlers (ported from GolferFest) ──
+
+    private void handleSendVerificationCode(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+        response.setContentType("application/json");
+        try {
+            if (!phoneVerificationService.isConfigured()) {
+                response.getWriter().write("{\"success\": false, \"message\": \"Text messaging is not configured\"}");
+                return;
+            }
+            String phone = request.getParameter("phone");
+            String normalized = PhoneVerificationService.normalizePhoneNumber(phone != null ? phone.trim() : null);
+            if (normalized == null || !E164_PATTERN.matcher(normalized).matches()) {
+                response.getWriter().write("{\"success\": false, \"message\": \"Invalid phone number format\"}");
+                return;
+            }
+            String status = phoneVerificationService.sendVerificationCode(normalized);
+            if ("pending".equals(status)) {
+                response.getWriter().write("{\"success\": true, \"message\": \"Verification code sent to "
+                        + normalized.replace("\"", "'") + "\"}");
+            } else {
+                response.getWriter().write("{\"success\": false, \"message\": \"Failed to send code. Status: "
+                        + status + "\"}");
+            }
+        } catch (Exception e) {
+            System.err.println("SignUpServlet.handleSendVerificationCode: " + e.getMessage());
+            response.getWriter().write("{\"success\": false, \"message\": \"Error: "
+                    + e.getMessage().replace("\"", "'") + "\"}");
+        }
+    }
+
+    private void handleCheckVerificationCode(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+        response.setContentType("application/json");
+        try {
+            String phone = request.getParameter("phone");
+            String code = request.getParameter("code");
+            String normalized = PhoneVerificationService.normalizePhoneNumber(phone != null ? phone.trim() : null);
+            boolean verified = phoneVerificationService.checkVerificationCode(normalized, code != null ? code.trim() : "");
+            if (verified) {
+                // Remember which number was verified for the final sign-up POST
+                request.getSession(true).setAttribute(VERIFIED_PHONE_ATTR, normalized);
+                response.getWriter().write("{\"success\": true, \"message\": \"Phone verified! You can finish signing up.\"}");
+            } else {
+                response.getWriter().write("{\"success\": false, \"message\": \"Invalid or expired code. Please try again.\"}");
+            }
+        } catch (Exception e) {
+            System.err.println("SignUpServlet.handleCheckVerificationCode: " + e.getMessage());
+            response.getWriter().write("{\"success\": false, \"message\": \"Error: "
+                    + e.getMessage().replace("\"", "'") + "\"}");
+        }
     }
 }
 

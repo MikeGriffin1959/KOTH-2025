@@ -126,6 +126,18 @@
             border: 1px solid transparent;
             border-radius: 0.25rem;
         }
+        .verified-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            background-color: #0d3320; color: #90EE90;
+            padding: 2px 8px; border-radius: 12px;
+            font-size: 0.78rem; font-weight: 500; white-space: nowrap;
+        }
+        .unverified-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            background-color: #3a1a1a; color: #FF6B6B;
+            padding: 2px 8px; border-radius: 12px;
+            font-size: 0.78rem; font-weight: 500; white-space: nowrap;
+        }
     </style>
 </head>
 <body>               
@@ -476,6 +488,8 @@
                                         <th>First Name</th>
                                         <th>Username</th>
                                         <th>Email</th>
+                                        <th title="Cell number verified via texted code">Phone<br>Verified</th>
+                                        <th title="Email address verified via emailed link">Email<br>Verified</th>
                                         <th>Commish</th>
                                         <th>Paid</th>
                                         <th>Initial<br>Picks</th>
@@ -489,6 +503,26 @@
                                             <td class="text-left">${user.firstName}</td>
                                             <td class="text-left">${user.username}</td>
                                             <td class="text-left">${user.email}</td>
+                                            <td>
+                                                <c:choose>
+                                                    <c:when test="${user.phoneVerified}">
+                                                        <span class="verified-badge" title="Phone verified">&#10003; Yes</span>
+                                                    </c:when>
+                                                    <c:otherwise>
+                                                        <span class="unverified-badge" title="Phone not verified - receives no texts">&#9888; No</span>
+                                                    </c:otherwise>
+                                                </c:choose>
+                                            </td>
+                                            <td>
+                                                <c:choose>
+                                                    <c:when test="${user.emailVerified}">
+                                                        <span class="verified-badge" title="Email verified">&#10003; Yes</span>
+                                                    </c:when>
+                                                    <c:otherwise>
+                                                        <span class="unverified-badge" title="Email not verified">&#9888; No</span>
+                                                    </c:otherwise>
+                                                </c:choose>
+                                            </td>
                                             <td>
                                                 <input type="checkbox" name="userCommish_${user.idUser}" ${user.commish ? "checked" : ""}>
                                             </td>

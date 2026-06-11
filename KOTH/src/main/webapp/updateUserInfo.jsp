@@ -61,8 +61,24 @@ session.removeAttribute("messageType");
         <input type="text" class="form-control" id="userName" name="userName" value="<%= user != null ? user.getUsername() : "" %>" required>
     </div>
     <div class="form-group">
-        <label for="email">Email:</label>
-             <input type="email" class="form-control" id="email" name="email" required maxlength="40" placeholder="e.g., john@example.com">
+        <label for="email">
+            Email:
+            <% if (user.isEmailVerified()) { %>
+                <span class="badge badge-success"><i class="fas fa-check-circle"></i> Verified</span>
+            <% } else { %>
+                <span class="badge badge-warning"><i class="fas fa-exclamation-circle"></i> Not Verified</span>
+            <% } %>
+        </label>
+        <input type="email" class="form-control" id="email" name="email" required maxlength="40"
+               placeholder="e.g., john@example.com" value="<%= user.getEmail() != null ? user.getEmail() : "" %>">
+        <% if (!user.isEmailVerified()) { %>
+            <div class="mt-2">
+                <div id="emailVerifyAlert" class="alert" style="display:none; max-width:350px;"></div>
+                <button type="button" class="btn btn-sm btn-outline-info" onclick="resendVerificationEmail()" id="resendEmailBtn">
+                    <i class="fas fa-envelope"></i> Send Verification Email
+                </button>
+            </div>
+        <% } %>
     </div>
     <div class="form-group">
         <label for="cellNumber">
@@ -151,6 +167,24 @@ function postForm(params) {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
         body: params
     }).then(function(r){ return r.json(); });
+}
+function resendVerificationEmail() {
+    var btn = document.getElementById('resendEmailBtn');
+    var a = document.getElementById('emailVerifyAlert');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    postForm('action=resendVerificationEmail')
+        .then(function(data) {
+            a.textContent = data.message;
+            a.className = data.success ? 'alert alert-success' : 'alert alert-danger';
+            a.style.display = 'block';
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-envelope"></i> Send Verification Email';
+        })
+        .catch(function(e) {
+            a.textContent = 'Error: ' + e.message;
+            a.className = 'alert alert-danger';
+            a.style.display = 'block';
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-envelope"></i> Send Verification Email';
+        });
 }
 function sendVerificationCode() {
     var phone = document.getElementById('cellNumber').value.trim();

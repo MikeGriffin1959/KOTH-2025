@@ -8,6 +8,7 @@ public class User {
     private String email;
     private String cellNumber;
     private boolean phoneVerified;   // SMS feature: cell number verified via Twilio Verify
+    private boolean emailVerified;   // Email verification: clicked the emailed link
     private String password;
     private int initialPicks;
     private int remainingPicksLive;
@@ -78,6 +79,14 @@ public class User {
 
     public void setPhoneVerified(boolean phoneVerified) {
         this.phoneVerified = phoneVerified;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
     }
 
     public String getPassword() {
