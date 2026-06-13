@@ -55,6 +55,9 @@ public class CommentaryService {
     @Value("${commentary.api.dailyCapUsd:5.00}")
     private double dailyCapUsd;
 
+    @Value("${app.base.url:http://localhost:8081/KOTH}")
+    private String appBaseUrl;
+
     // Sonnet 4.6 pricing per the design doc / Claude API reference (verified):
     // $3.00 / Mtok input, $15.00 / Mtok output. Update these together with
     // commentary.api.model if the model ever changes.
@@ -189,7 +192,7 @@ public class CommentaryService {
                     if (smsPreferencesDAO.claim(season, week, "WEEK_RECAP", "recap")) {
                         String body = "[KOTH] Week " + week + " recap: "
                                 + smsSnippet(commentary.getBody(), 360)
-                                + " Full story on the Commentary page.";
+                                + " Full story: " + appBaseUrl + "/CommentaryServlet";
                         smsService.broadcastToSeason(model.SmsNotificationType.WEEK_RECAP,
                                 season, false, body);
                     }
@@ -200,7 +203,8 @@ public class CommentaryService {
                             + ":" + (commentary.getGameId() != null ? commentary.getGameId() : 0)
                             + ":" + (commentary.getAffectedUserIds() != null ? commentary.getAffectedUserIds() : "");
                     if (smsPreferencesDAO.claim(season, week, "COMMENTARY_EVENT", refKey)) {
-                        String body = "[KOTH] " + smsSnippet(commentary.getBody(), 360);
+                        String body = "[KOTH] " + smsSnippet(commentary.getBody(), 360)
+                                + " Full story: " + appBaseUrl + "/CommentaryServlet";
                         smsService.broadcastToSeason(model.SmsNotificationType.COMMENTARY_EVENT,
                                 season, false, body);
                     }
