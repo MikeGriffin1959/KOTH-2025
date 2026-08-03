@@ -20,10 +20,19 @@ public class AuthFilter implements Filter {
 			  "/accessDenied.jsp",            
 			  "/health", 
 			  "/status",
-			  "/styles.css", 
+			  "/styles.css",
 //			  "/favicon.ico",
 			  "/KOTH-Tab-Icon.png",
-			  "/stadium.jpeg" 
+			  "/stadium.jpeg",
+			  // Email verification link is clicked from an inbox, usually logged out
+			  // (token itself is the credential — an unguessable one-time UUID)
+			  "/VerifyEmailServlet",
+			  // PWA assets: must load before/without a session (install + service worker)
+			  "/manifest.webmanifest",
+			  "/sw.js",
+			  "/icon-192.png",
+			  "/icon-512.png",
+			  "/icon-180.png"
 			);
 
   private static boolean isPublic(HttpServletRequest req) {
