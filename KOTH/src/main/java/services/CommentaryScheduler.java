@@ -78,6 +78,20 @@ public class CommentaryScheduler {
                 runEventDetection(season, currentWeek, cfg);
             }
 
+            // M4: Weekly Preview — once, on the configured preview day (>= 9am ET),
+            // while the week still has unplayed games.
+            if (isPreviewTime(cfg) && !gameStates.isEmpty()
+                    && !gameTable.isWeekComplete(season, currentWeek)
+                    && !commentaryTable.hasCommentary(season, currentWeek, "PREVIEW")) {
+                System.out.println("CommentaryScheduler.tick - preview day, generating weekly preview");
+                commentaryService.generateWeeklyPreview(season, currentWeek);
+            }
+
+            // M4: Kickoff Reveal — per kickoff window, only when picks are masked.
+            if (cfg.isMaskPicks()) {
+                runKickoffReveals(season, currentWeek, cfg, gameStates);
+            }
+
             // M2: Week Recap — once, after the last game of the week is final.
             // Also look at the previous week so a recap is never missed if the
             // calculator rolls right after MNF (hasCommentary = idempotent).
@@ -126,6 +140,58 @@ public class CommentaryScheduler {
         } catch (Exception e) {
             System.err.println("CommentaryScheduler.tickLateDrama - error: " + e.getMessage());
         }
+    }
+
+    // ── M4 internals ───────────────────────────────────────────
+
+    /** Preview fires on picksprice.previewDayOfWeek (java.time convention,
+     *  1=Mon..7=Sun), any tick from 9am ET onward. */
+    private boolean isPreviewTime(PicksPrice cfg) {
+        java.time.ZonedDateTime nowEt = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/New_York"));
+        return nowEt.getDayOfWeek().getValue() == cfg.getPreviewDayOfWeek()
+                && nowEt.getHour() >= 9;
+    }
+
+    /**
+     * Kickoff windows are derived from the actual schedule: games sharing the
+     * same kickoff instant form a window (Thu night, Sun 1:00, Sun 4:05/4:25,
+     * SNF, MNF fall out naturally). A reveal fires once per window when its
+     * kickoff time has passed — but only within 90 minutes of kickoff, so a
+     * mid-season deploy doesn't backfill reveals for long-past windows.
+     * Dedupe: streamType=REVEAL rows carry gameId = min gameId of the window
+     * (eventType null), checked via idx_dedupe.
+     */
+    private void runKickoffReveals(int season, int week, PicksPrice cfg, List<Map<String, Object>> gameStates) {
+        Instant now = Instant.now();
+        Map<String, List<Map<String, Object>>> windows = new java.util.TreeMap<>();
+        for (Map<String, Object> g : gameStates) {
+            String date = (String) g.get("date");
+            if (date == null) continue;
+            windows.computeIfAbsent(date, k -> new java.util.ArrayList<>()).add(g);
+        }
+        for (Map.Entry<String, List<Map<String, Object>>> w : windows.entrySet()) {
+            Instant kickoff = parseKickoff(w.getKey());
+            if (kickoff == null || kickoff.isAfter(now)) continue;               // not kicked off yet
+            if (kickoff.isBefore(now.minusSeconds(90 * 60))) continue;           // too old — no backfill
+            int minGameId = Integer.MAX_VALUE;
+            for (Map<String, Object> g : w.getValue()) {
+                minGameId = Math.min(minGameId, (Integer) g.get("gameId"));
+            }
+            if (commentaryTable.findByDedupeKey(season, cfg.getKothSeason(), week, minGameId, null)) {
+                continue; // this window's reveal already generated
+            }
+            String label = kickoffLabel(kickoff);
+            System.out.println("CommentaryScheduler - kickoff window " + w.getKey() + " opened, generating reveal");
+            boolean generated = commentaryService.generateKickoffReveal(season, week, label, w.getValue());
+            System.out.println("CommentaryScheduler - reveal " + (generated ? "generated" : "skipped/failed")
+                    + " for window " + w.getKey());
+        }
+    }
+
+    /** Friendly window label in ET, e.g. "Sunday 1:00 PM". */
+    private String kickoffLabel(Instant kickoff) {
+        java.time.ZonedDateTime et = kickoff.atZone(java.time.ZoneId.of("America/New_York"));
+        return et.format(java.time.format.DateTimeFormatter.ofPattern("EEEE h:mm a"));
     }
 
     // ── M3 internals ───────────────────────────────────────────

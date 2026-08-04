@@ -351,6 +351,117 @@ public class CommentaryService {
     }
 
     /**
+     * Generate the Weekly Preview (M4): sets the stage for the coming week.
+     * Masking-aware — when picksprice.maskPicks is on, the prompt carries no
+     * pick details. Persists streamType=PREVIEW (page-only; no SMS stream).
+     * Caller handles the once-per-week dedupe.
+     */
+    public boolean generateWeeklyPreview(int season, int week) {
+        System.out.println("CommentaryService.generateWeeklyPreview called for season=" + season + ", week=" + week);
+
+        List<PicksPrice> prices = picksPriceTable.getPickPrices(season);
+        if (prices.isEmpty()) return false;
+        PicksPrice cfg = prices.get(0);
+        if (!cfg.isCommentaryEnabled() || !isConfigured() || dailyCostCapExceeded()) {
+            return false;
+        }
+
+        List<java.util.Map<String, Object>> games = commentaryTable.getWeekGameStates(season, week);
+        if (games.isEmpty()) {
+            System.out.println("CommentaryService.generateWeeklyPreview - no games for week " + week + ", skipping");
+            return false;
+        }
+        List<java.util.Map<String, Object>> standings = commentaryTable.getSeasonStandings(season);
+        boolean masked = cfg.isMaskPicks();
+        List<java.util.Map<String, Object>> picks =
+                masked ? null : commentaryTable.getWeekPicksWithGameState(season, week);
+
+        int snarkLevel = cfg.getSnarkLevel();
+        String systemPrompt = buildSystemPrompt(snarkLevel, "PREVIEW");
+        String userPrompt = buildPreviewPrompt(season, week, masked, games, standings, picks);
+
+        ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
+        if (result == null || result.text == null || result.text.isEmpty()) {
+            System.err.println("CommentaryService.generateWeeklyPreview - empty/failed API response");
+            return false;
+        }
+
+        Commentary commentary = new Commentary();
+        commentary.setSeason(season);
+        commentary.setKothSeason(cfg.getKothSeason());
+        commentary.setWeek(week);
+        commentary.setStreamType("PREVIEW");
+        commentary.setSnarkLevel(snarkLevel);
+        commentary.setPromptTokens(result.promptTokens);
+        commentary.setResponseTokens(result.responseTokens);
+        commentary.setBody(result.text);
+
+        if (!commentaryTable.insert(commentary)) return false;
+        System.out.println("CommentaryService.generateWeeklyPreview - persisted commentaryId=" + commentary.getCommentaryId());
+        return true;
+    }
+
+    /**
+     * Generate the Kickoff Reveal (M4) for one kickoff window — only meaningful
+     * when picks are masked (the caller gates on cfg.isMaskPicks()). Persists
+     * streamType=REVEAL with gameId = the window's representative (minimum)
+     * gameId, which is also the dedupe key the scheduler checks.
+     */
+    public boolean generateKickoffReveal(int season, int week, String windowLabel,
+                                         List<java.util.Map<String, Object>> windowGames) {
+        System.out.println("CommentaryService.generateKickoffReveal called for season=" + season
+                + ", week=" + week + ", window=" + windowLabel);
+
+        List<PicksPrice> prices = picksPriceTable.getPickPrices(season);
+        if (prices.isEmpty()) return false;
+        PicksPrice cfg = prices.get(0);
+        if (!cfg.isCommentaryEnabled() || !cfg.isMaskPicks() || !isConfigured() || dailyCostCapExceeded()) {
+            return false;
+        }
+        if (windowGames == null || windowGames.isEmpty()) return false;
+
+        // Picks riding on this window's games
+        java.util.Set<Integer> windowGameIds = new java.util.HashSet<>();
+        int minGameId = Integer.MAX_VALUE;
+        for (java.util.Map<String, Object> g : windowGames) {
+            int id = (Integer) g.get("gameId");
+            windowGameIds.add(id);
+            if (id < minGameId) minGameId = id;
+        }
+        List<java.util.Map<String, Object>> windowPicks = new java.util.ArrayList<>();
+        for (java.util.Map<String, Object> p : commentaryTable.getWeekPicksWithGameState(season, week)) {
+            if (windowGameIds.contains((Integer) p.get("gameId"))) {
+                windowPicks.add(p);
+            }
+        }
+
+        int snarkLevel = cfg.getSnarkLevel();
+        String systemPrompt = buildSystemPrompt(snarkLevel, "REVEAL");
+        String userPrompt = buildKickoffRevealPrompt(season, week, windowLabel, windowGames, windowPicks);
+
+        ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
+        if (result == null || result.text == null || result.text.isEmpty()) {
+            System.err.println("CommentaryService.generateKickoffReveal - empty/failed API response");
+            return false;
+        }
+
+        Commentary commentary = new Commentary();
+        commentary.setSeason(season);
+        commentary.setKothSeason(cfg.getKothSeason());
+        commentary.setWeek(week);
+        commentary.setStreamType("REVEAL");
+        commentary.setGameId(minGameId);
+        commentary.setSnarkLevel(snarkLevel);
+        commentary.setPromptTokens(result.promptTokens);
+        commentary.setResponseTokens(result.responseTokens);
+        commentary.setBody(result.text);
+
+        if (!commentaryTable.insert(commentary)) return false;
+        System.out.println("CommentaryService.generateKickoffReveal - persisted commentaryId=" + commentary.getCommentaryId());
+        return true;
+    }
+
+    /**
      * True if today's accumulated token spend (across all streams) is at or above
      * the configured daily cap, applying current Sonnet 4.6 pricing. Used as a
      * circuit-breaker before any generation call. Fails open (returns false) only
@@ -422,6 +533,18 @@ public class CommentaryService {
 
         // Per-stream output format
         switch (streamType) {
+            case "PREVIEW":
+                sb.append("FORMAT: Weekly Preview — set the stage for the week ahead. State of the field, ");
+                sb.append("the betting landscape (spreads/totals), who needs what. If picks are provided, ");
+                sb.append("tease notable choices; if the data says picks are MASKED, talk matchups and the ");
+                sb.append("betting board only — NO specific pick callouts (historical tendencies are fine). ");
+                sb.append("3-5 sentences.\n\n");
+                break;
+            case "REVEAL":
+                sb.append("FORMAT: Kickoff Reveal — the masked picks for the games just kicking off are now ");
+                sb.append("public. This is the unmask moment: who took what, where the herd went, who went ");
+                sb.append("rogue. React with delight or alarm as warranted. 2-3 sentences.\n\n");
+                break;
             case "EVENT":
                 sb.append("FORMAT: Breaking-news reactive commentary. Something just happened in a live ");
                 sb.append("game (or one just went final) and survivor fates moved. React to THIS MOMENT — ");
@@ -499,6 +622,92 @@ public class CommentaryService {
         }
         sb.append("\nSurvivors still alive: ").append(aliveCount).append("\n");
         sb.append("\nWrite the recap now.");
+        return sb.toString();
+    }
+
+    /** Weekly Preview user prompt (M4): the slate + field state; masking-aware. */
+    private String buildPreviewPrompt(int season, int week, boolean masked,
+                                      List<java.util.Map<String, Object>> games,
+                                      List<java.util.Map<String, Object>> standings,
+                                      List<java.util.Map<String, Object>> picks) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Season ").append(season).append(", Week ").append(week)
+          .append(". Write the Weekly Preview.\n");
+        if (week >= 19) {
+            sb.append("PLAYOFF CONTEXT: this is ")
+              .append(week == 19 ? "Wild Card weekend" : week == 20 ? "the Divisional round"
+                      : week == 21 ? "Championship weekend" : "the Super Bowl")
+              .append(" — stakes and slate are playoff-sized.\n");
+        }
+
+        sb.append("\n=== THE FIELD ===\n");
+        long alive = 0;
+        for (java.util.Map<String, Object> s : standings) {
+            int remaining = (Integer) s.get("remaining");
+            if (remaining > 0) {
+                alive++;
+                sb.append(s.get("firstName")).append(" (").append(s.get("username")).append("): ")
+                  .append(remaining).append(" pick").append(remaining == 1 ? "" : "s").append(" left\n");
+            }
+        }
+        sb.append("Survivors alive: ").append(alive).append("\n");
+
+        sb.append("\n=== THIS WEEK'S SLATE (spread is home-relative; negative = home favored) ===\n");
+        for (java.util.Map<String, Object> g : games) {
+            sb.append(g.get("awayTeamName")).append(" @ ").append(g.get("homeTeamName"));
+            Double sp = (Double) g.get("pointSpread");
+            Double ou = (Double) g.get("overUnder");
+            if (sp != null) sb.append(" | spread ").append(sp);
+            if (ou != null) sb.append(" | o/u ").append(ou);
+            sb.append("\n");
+        }
+
+        if (masked) {
+            sb.append("\nPICKS ARE MASKED this week — players cannot see each other's picks until ");
+            sb.append("kickoff. Do NOT reveal or speculate on specific picks; preview the matchups ");
+            sb.append("and the pressure instead.\n");
+        } else if (picks != null && !picks.isEmpty()) {
+            sb.append("\n=== PICKS SO FAR (public this week) ===\n");
+            for (java.util.Map<String, Object> p : picks) {
+                sb.append(p.get("firstName")).append(" (").append(p.get("username")).append(") -> ")
+                  .append(p.get("selectedTeam")).append("\n");
+            }
+        } else {
+            sb.append("\nNo picks are in yet.\n");
+        }
+
+        sb.append("\nWrite the preview now.");
+        return sb.toString();
+    }
+
+    /** Kickoff Reveal user prompt (M4): the unmask moment for one kickoff window. */
+    private String buildKickoffRevealPrompt(int season, int week, String windowLabel,
+                                            List<java.util.Map<String, Object>> windowGames,
+                                            List<java.util.Map<String, Object>> windowPicks) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Season ").append(season).append(", Week ").append(week)
+          .append(". KICKOFF REVEAL — the ").append(windowLabel)
+          .append(" games are kicking off and the masked picks on them are now public.\n");
+
+        sb.append("\n=== GAMES KICKING OFF ===\n");
+        for (java.util.Map<String, Object> g : windowGames) {
+            sb.append(g.get("awayTeamName")).append(" @ ").append(g.get("homeTeamName"));
+            Double sp = (Double) g.get("pointSpread");
+            if (sp != null) sb.append(" | spread ").append(sp);
+            sb.append("\n");
+        }
+
+        sb.append("\n=== PICKS JUST REVEALED ===\n");
+        if (windowPicks.isEmpty()) {
+            sb.append("(no survivor picks ride on these games)\n");
+        } else {
+            for (java.util.Map<String, Object> p : windowPicks) {
+                sb.append(p.get("firstName")).append(" (").append(p.get("username")).append(") -> ")
+                  .append(p.get("selectedTeam")).append("\n");
+            }
+        }
+
+        sb.append("\nWrite the reveal now (2-3 sentences).");
         return sb.toString();
     }
 

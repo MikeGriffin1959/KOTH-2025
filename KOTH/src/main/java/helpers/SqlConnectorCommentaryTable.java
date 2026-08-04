@@ -295,13 +295,18 @@ public class SqlConnectorCommentaryTable {
     }
 
     /**
-     * Lightweight per-game state for the week (ALL games, picked or not):
-     * used for the game-window check and LAST_STAND's "only one game left".
-     * Keys: gameId, status, date (ISO-8601 UTC string), period, displayClock
+     * Per-game state for the week (ALL games, picked or not): used for the
+     * game-window check, LAST_STAND's "only one game left", the weekly preview
+     * slate, and kickoff-window detection. Raw team-name columns.
+     * Keys: gameId, status, date (ISO-8601 UTC string), period, displayClock,
+     *       homeTeamName, awayTeamName, pointSpread (nullable Double),
+     *       overUnder (nullable Double)
      */
     public List<java.util.Map<String, Object>> getWeekGameStates(int season, int week) {
         List<java.util.Map<String, Object>> rows = new ArrayList<>();
-        String sql = "SELECT GameID, status, date, period, displayClock FROM KOTH.Game WHERE season = ? AND week = ?";
+        String sql = "SELECT GameID, status, date, period, displayClock, " +
+                     "homeTeamName, awayTeamName, pointSpread, overUnder " +
+                     "FROM KOTH.Game WHERE season = ? AND week = ?";
         try (Connection connection = dataSource.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setInt(1, season);
@@ -314,6 +319,12 @@ public class SqlConnectorCommentaryTable {
                     row.put("date", rs.getString("date"));
                     row.put("period", rs.getString("period"));
                     row.put("displayClock", rs.getString("displayClock"));
+                    row.put("homeTeamName", rs.getString("homeTeamName"));
+                    row.put("awayTeamName", rs.getString("awayTeamName"));
+                    double sp = rs.getDouble("pointSpread");
+                    row.put("pointSpread", rs.wasNull() ? null : sp);
+                    double ou = rs.getDouble("overUnder");
+                    row.put("overUnder", rs.wasNull() ? null : ou);
                     rows.add(row);
                 }
             }
