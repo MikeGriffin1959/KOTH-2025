@@ -422,6 +422,11 @@
                         </div>
 
                         <button type="button" class="btn btn-primary" id="testCommentaryBtn">Fire Test Commentary</button>
+                        <div class="mt-3">
+                            <a href="DossierServlet" class="btn btn-sm btn-outline-light">
+                                <i class="fas fa-address-book"></i> Manage Dossiers
+                            </a>
+                        </div>
                         <div id="testCommentaryReadout" class="mt-3"
                              style="display:none; white-space: pre-wrap; background:#222; color:#eee; padding:10px; border-radius:4px;"></div>
                     </div>

@@ -78,6 +78,9 @@ public class CommentaryService {
     @Autowired
     private helpers.SmsPreferencesDAO smsPreferencesDAO; // claim() dedupe
 
+    @Autowired
+    private helpers.SqlConnectorDossierTable dossierTable; // M5 personality layer
+
     // ════════════════════════════════════════════════════════════
     // PUBLIC API
     // ════════════════════════════════════════════════════════════
@@ -132,7 +135,10 @@ public class CommentaryService {
 
         int snarkLevel = cfg.getSnarkLevel();
         String systemPrompt = buildSystemPrompt(snarkLevel, "TEST");
-        String userPrompt = buildTestPrompt(season, week, snarkLevel);
+        // Dossiers ride along so the commissioner's test button demonstrates
+        // the personality layer (edit a dossier -> fire test -> hear it).
+        String userPrompt = poolContextBlock(season) + dossierBlock(season, null)
+                + buildTestPrompt(season, week, snarkLevel);
 
         ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
         if (result == null || result.text == null || result.text.isEmpty()) {
@@ -265,7 +271,8 @@ public class CommentaryService {
 
         int snarkLevel = cfg.getSnarkLevel();
         String systemPrompt = buildSystemPrompt(snarkLevel, "RECAP");
-        String userPrompt = buildRecapPrompt(season, week, outcomes, standings, aliveCount, seasonFinale);
+        String userPrompt = poolContextBlock(season) + dossierBlock(season, null)
+                + buildRecapPrompt(season, week, outcomes, standings, aliveCount, seasonFinale);
 
         ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
         if (result == null || result.text == null || result.text.isEmpty()) {
@@ -312,7 +319,11 @@ public class CommentaryService {
 
         int snarkLevel = cfg.getSnarkLevel();
         String systemPrompt = buildSystemPrompt(snarkLevel, "EVENT");
-        String userPrompt = buildEventPrompt(season, week, event);
+        // Inject only the affected users' dossiers — sensitivities here are
+        // load-bearing (ELIMINATION tone modulation, design §M5)
+        String userPrompt = poolContextBlock(season)
+                + dossierBlock(season, event.getAffectedUserIds())
+                + buildEventPrompt(season, week, event);
 
         ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
         if (result == null || result.text == null || result.text.isEmpty()) {
@@ -378,7 +389,8 @@ public class CommentaryService {
 
         int snarkLevel = cfg.getSnarkLevel();
         String systemPrompt = buildSystemPrompt(snarkLevel, "PREVIEW");
-        String userPrompt = buildPreviewPrompt(season, week, masked, games, standings, picks);
+        String userPrompt = poolContextBlock(season) + dossierBlock(season, null)
+                + buildPreviewPrompt(season, week, masked, games, standings, picks);
 
         ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
         if (result == null || result.text == null || result.text.isEmpty()) {
@@ -435,9 +447,16 @@ public class CommentaryService {
             }
         }
 
+        java.util.Set<Integer> revealUserIds = new java.util.HashSet<>();
+        for (java.util.Map<String, Object> p : windowPicks) {
+            revealUserIds.add((Integer) p.get("idUser"));
+        }
+
         int snarkLevel = cfg.getSnarkLevel();
         String systemPrompt = buildSystemPrompt(snarkLevel, "REVEAL");
-        String userPrompt = buildKickoffRevealPrompt(season, week, windowLabel, windowGames, windowPicks);
+        String userPrompt = poolContextBlock(season)
+                + dossierBlock(season, revealUserIds.isEmpty() ? null : revealUserIds)
+                + buildKickoffRevealPrompt(season, week, windowLabel, windowGames, windowPicks);
 
         ClaudeResult result = callClaudeApi(systemPrompt, userPrompt);
         if (result == null || result.text == null || result.text.isEmpty()) {
@@ -529,7 +548,12 @@ public class CommentaryService {
         sb.append("   At every level Mike is treated with affection. (TROUBLE and other still-alive moments carry no such ");
         sb.append("restriction — a struggling-but-alive player is fair game for full snark.)\n");
         sb.append("3. Refer to players by their display name / first name. Never invent stats, scores, or outcomes beyond ");
-        sb.append("the data you are given.\n\n");
+        sb.append("the data you are given.\n");
+        sb.append("4. If a PLAYER DOSSIERS section is provided, weave personality, running jokes, and rivalries in ");
+        sb.append("naturally — like a sportscaster who knows the backstory, not a form letter. Don't force every ");
+        sb.append("detail into every blurb. A player's SENSITIVITIES are a CEILING that overrides the snark level ");
+        sb.append("for that player: pull punches exactly as flagged, especially on eliminations.\n");
+        sb.append("5. If a POOL CONTEXT section is provided, treat its lore and tone guidance as house style.\n\n");
 
         // Per-stream output format
         switch (streamType) {
@@ -624,6 +648,47 @@ public class CommentaryService {
         sb.append("\nWrite the recap now.");
         return sb.toString();
     }
+
+    // ── M5: dossier injection ──────────────────────────────────
+
+    /** Pool-level context (identity/lore/tone), or "" if none saved. Layer 2 of the prompt. */
+    private String poolContextBlock(int season) {
+        model.PoolDossier pool = dossierTable.getPoolDossier(season);
+        if (pool == null || !pool.hasContent()) return "";
+        StringBuilder sb = new StringBuilder("=== POOL CONTEXT ===\n");
+        if (nz(pool.getPoolIdentity()))      sb.append("Identity: ").append(pool.getPoolIdentity().trim()).append("\n");
+        if (nz(pool.getPoolHistory()))       sb.append("History: ").append(pool.getPoolHistory().trim()).append("\n");
+        if (nz(pool.getPoolLore()))          sb.append("Lore: ").append(pool.getPoolLore().trim()).append("\n");
+        if (nz(pool.getCommissionerNotes())) sb.append("Commissioner notes: ").append(pool.getCommissionerNotes().trim()).append("\n");
+        if (nz(pool.getToneGuidance()))      sb.append("Tone guidance: ").append(pool.getToneGuidance().trim()).append("\n");
+        sb.append("\n");
+        return sb.toString();
+    }
+
+    /**
+     * Player dossier block for the given users (null userIds = everyone with
+     * content). Sensitivities ride along and are enforced by the system prompt.
+     */
+    private String dossierBlock(int season, java.util.Collection<Integer> userIds) {
+        List<model.UserDossier> all = dossierTable.getUserDossiersForSeason(season);
+        StringBuilder sb = new StringBuilder();
+        for (model.UserDossier d : all) {
+            if (!d.hasContent()) continue;
+            if (userIds != null && !userIds.contains(d.getUserId())) continue;
+            if (sb.length() == 0) sb.append("=== PLAYER DOSSIERS ===\n");
+            sb.append(d.commentaryName()).append(" (").append(d.getUsername()).append(")");
+            if (nz(d.getDisplayName())) sb.append(" — always call them \"").append(d.getDisplayName().trim()).append("\"");
+            sb.append(":");
+            if (nz(d.getPersonality()))   sb.append(" ").append(d.getPersonality().trim());
+            if (nz(d.getRivalries()))     sb.append(" Rivalries: ").append(d.getRivalries().trim()).append(".");
+            if (nz(d.getSensitivities())) sb.append(" SENSITIVITIES (ceiling): ").append(d.getSensitivities().trim()).append(".");
+            sb.append("\n");
+        }
+        if (sb.length() > 0) sb.append("\n");
+        return sb.toString();
+    }
+
+    private boolean nz(String s) { return s != null && !s.trim().isEmpty(); }
 
     /** Weekly Preview user prompt (M4): the slate + field state; masking-aware. */
     private String buildPreviewPrompt(int season, int week, boolean masked,
