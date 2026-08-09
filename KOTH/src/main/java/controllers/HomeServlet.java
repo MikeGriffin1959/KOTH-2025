@@ -290,11 +290,14 @@ public class HomeServlet {
 	        if (!gamePicks.isEmpty()) {
 	            Map<String, Object> game = gamePicks.get(0);
 	
-	            // Count picks
+	            // Count picks. Normalize to the abbreviation before merging — legacy rows
+	            // stored mascot names ("Bills") alongside abbreviations ("BUF"), which
+	            // rendered the same team as two tiles with split counts.
 	            for (Map<String, Object> pick : gamePicks) {
 	                String selectedTeam = (String) pick.get("selectedTeam");
 	                if (selectedTeam != null) {
-	                    teamPickCounts.merge(selectedTeam, 1, Integer::sum);
+	                    String key = teamNameToAbbrev.getOrDefault(selectedTeam, selectedTeam);
+	                    teamPickCounts.merge(key, 1, Integer::sum);
 	                }
 	            }
 	

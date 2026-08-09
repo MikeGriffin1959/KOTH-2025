@@ -150,7 +150,7 @@ public class MyScoreboardServlet {
             processGameStatus(games);
 
             // ✅ Calculate team pick counts for the current week
-            Map<String, Integer> teamPickCounts = calculateTeamPickCounts(seasonInt, weekInt);
+            Map<String, Integer> teamPickCounts = calculateTeamPickCounts(seasonInt, weekInt, teamNameToAbbrev);
 
             // ✅ Add attributes for JSP
             model.addAttribute("remainingPicks", remainingPicks);
@@ -330,7 +330,8 @@ public class MyScoreboardServlet {
                 break;
         }
     }
-    private Map<String, Integer> calculateTeamPickCounts(int seasonInt, int weekInt) {
+    private Map<String, Integer> calculateTeamPickCounts(int seasonInt, int weekInt,
+            Map<String, String> teamNameToAbbrev) {
         Map<String, Integer> teamPickCounts = new HashMap<>();
         
         try {
@@ -352,7 +353,11 @@ public class MyScoreboardServlet {
                         String selectedTeam = (String) pick.get("selectedTeam");
                         System.out.println("DEBUG: My Scoreboard Servlet - Found pick for team: " + selectedTeam);
                         if (selectedTeam != null) {
-                            teamPickCounts.merge(selectedTeam, 1, Integer::sum);
+                            // Normalize legacy mascot-name picks ("Bills") onto the abbreviation
+                            String key = (teamNameToAbbrev != null)
+                                    ? teamNameToAbbrev.getOrDefault(selectedTeam, selectedTeam)
+                                    : selectedTeam;
+                            teamPickCounts.merge(key, 1, Integer::sum);
                         }
                     }
                 }

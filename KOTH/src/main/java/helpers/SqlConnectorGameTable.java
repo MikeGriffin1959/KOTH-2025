@@ -17,6 +17,26 @@ public class SqlConnectorGameTable {
 	private DataSource dataSource;
 
     /**
+     * apiTeamID -> apiTeamShortName ("SEA", "NE", ...). Game.homeTeamName/awayTeamName
+     * must always hold these abbreviations: Picks.selectedTeam and the commentary /
+     * event-detection SQL string-match against them.
+     */
+    private Map<Integer, String> loadTeamShortNamesById(Connection connection) throws SQLException {
+        Map<Integer, String> shortNames = new HashMap<>();
+        String sql = "SELECT apiTeamID, apiTeamShortName FROM KOTH.Teams";
+        try (PreparedStatement stmt = connection.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                String shortName = rs.getString("apiTeamShortName");
+                if (shortName != null && !shortName.isEmpty()) {
+                    shortNames.put(rs.getInt("apiTeamID"), shortName);
+                }
+            }
+        }
+        return shortNames;
+    }
+
+    /**
      * True when the week has at least one game and every game is final.
      * Backs CommentaryScheduler.isLastGameOfWeekFinal (Commentary M2).
      * Matches the raw ESPN STATUS_FINAL plus the legacy friendly forms
@@ -193,7 +213,10 @@ public class SqlConnectorGameTable {
         		+ season + ", Week: " + week );
 
         List<Game> games = new ArrayList<>();
-        String sql = "SELECT g.*, ht.apiTeamShortName AS HomeTeamName, at.apiTeamShortName AS AwayTeamName " +
+        // Alias the Teams-join columns with names that don't collide with g.homeTeamName /
+        // g.awayTeamName from g.* — JDBC resolves a duplicate column label to the first
+        // (raw) column, which silently served whatever the ESPN refresh last wrote there.
+        String sql = "SELECT g.*, ht.apiTeamShortName AS homeShortName, at.apiTeamShortName AS awayShortName " +
                      "FROM KOTH.Game g " +
                      "LEFT JOIN KOTH.Teams ht ON g.homeTeamId = ht.apiTeamID " +
                      "LEFT JOIN KOTH.Teams at ON g.awayTeamId = at.apiTeamID " +
@@ -219,8 +242,8 @@ public class SqlConnectorGameTable {
                     game.setAwayScore(rs.getInt("awayScore"));
                     game.setPointSpread(rs.getDouble("pointSpread"));
                     game.setOverUnder(rs.getDouble("overUnder"));
-                    game.setHomeTeamName(rs.getString("HomeTeamName"));
-                    game.setAwayTeamName(rs.getString("AwayTeamName"));
+                    game.setHomeTeamName(rs.getString("homeShortName"));
+                    game.setAwayTeamName(rs.getString("awayShortName"));
                     game.setDisplayClock(rs.getString("displayClock"));
                     game.setPeriod(rs.getString("period"));
 
@@ -264,16 +287,18 @@ public class SqlConnectorGameTable {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
+            Map<Integer, String> shortNames = loadTeamShortNamesById(connection);
+
             for (Game game : games) {
                 preparedStatement.setLong(1, game.getGameID());
                 preparedStatement.setInt(2, game.getSeason());
                 preparedStatement.setInt(3, game.getWeek());
                 preparedStatement.setString(4, game.getDate());
                 preparedStatement.setInt(5, game.getHomeTeamId());
-                preparedStatement.setString(6, game.getHomeTeamName());
+                preparedStatement.setString(6, shortNames.getOrDefault(game.getHomeTeamId(), game.getHomeTeamName()));
                 preparedStatement.setInt(7, game.getHomeScore());
                 preparedStatement.setInt(8, game.getAwayTeamId());
-                preparedStatement.setString(9, game.getAwayTeamName());
+                preparedStatement.setString(9, shortNames.getOrDefault(game.getAwayTeamId(), game.getAwayTeamName()));
                 preparedStatement.setInt(10, game.getAwayScore());
                 preparedStatement.setString(11, game.getStatus());
 
@@ -311,18 +336,18 @@ public class SqlConnectorGameTable {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
+            Map<Integer, String> shortNames = loadTeamShortNamesById(conn);
+
             for (Game game : games) {
-            	 System.out.println("Pre-update values for game " + game.getGameID() + 
-                         ": Season=" + game.getSeason() + 
+            	 System.out.println("Pre-update values for game " + game.getGameID() +
+                         ": Season=" + game.getSeason() +
                          ", Week=" + game.getWeek());
-                // Convert full names to abbreviations
-                String homeTeamAbbrev = game.getHomeTeamName().contains(" ") ? 
-                    game.getHomeTeamName().substring(game.getHomeTeamName().lastIndexOf(" ") + 1) : 
-                    game.getHomeTeamName();
-                    
-                String awayTeamAbbrev = game.getAwayTeamName().contains(" ") ? 
-                    game.getAwayTeamName().substring(game.getAwayTeamName().lastIndexOf(" ") + 1) : 
-                    game.getAwayTeamName();
+                // Convert whatever ESPN sent to the canonical apiTeamShortName abbreviation.
+                // The old last-word substring produced mascot names ("Seahawks"), which
+                // leaked into Picks.selectedTeam and broke pick aggregation and the
+                // commentary win/loss SQL.
+                String homeTeamAbbrev = shortNames.getOrDefault(game.getHomeTeamId(), game.getHomeTeamName());
+                String awayTeamAbbrev = shortNames.getOrDefault(game.getAwayTeamId(), game.getAwayTeamName());
 
                 pstmt.setLong(1, game.getGameID());
                 pstmt.setString(2, game.getStatus());
