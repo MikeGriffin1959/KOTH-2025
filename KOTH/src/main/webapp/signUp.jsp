@@ -109,7 +109,7 @@
                 <div class="mt-2">
                     <div id="verifyStep1">
                         <small class="mb-1 d-block"><strong>Verification required:</strong> we'll text a code to this number.</small>
-                        <button type="button" class="btn btn-sm btn-outline-info" onclick="sendVerificationCode()" id="sendCodeBtn">
+                        <button type="button" class="btn btn-sm btn-info" onclick="sendVerificationCode()" id="sendCodeBtn">
                             Send Verification Code
                         </button>
                         <div id="sendCodeResult" class="mt-1" style="display:none;"></div>

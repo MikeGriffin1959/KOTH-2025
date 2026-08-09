@@ -80,7 +80,7 @@ session.removeAttribute("messageType");
         <% if (!user.isEmailVerified()) { %>
             <div class="mt-2">
                 <div id="emailVerifyAlert" class="alert" style="display:none; max-width:350px;"></div>
-                <button type="button" class="btn btn-sm btn-outline-info" onclick="resendVerificationEmail()" id="resendEmailBtn">
+                <button type="button" class="btn btn-sm btn-info" onclick="resendVerificationEmail()" id="resendEmailBtn">
                     <i class="fas fa-envelope"></i> Send Verification Email
                 </button>
             </div>
@@ -103,7 +103,7 @@ session.removeAttribute("messageType");
             <div id="verifyAlert" class="alert" style="display:none; max-width: 350px;"></div>
             <% if (!user.isPhoneVerified()) { %>
                 <div id="verifyStep1">
-                    <button type="button" class="btn btn-sm btn-outline-info" onclick="sendVerificationCode()" id="sendCodeBtn">
+                    <button type="button" class="btn btn-sm btn-info" onclick="sendVerificationCode()" id="sendCodeBtn">
                         <i class="fas fa-mobile-alt"></i> Send Verification Code
                     </button>
                 </div>
