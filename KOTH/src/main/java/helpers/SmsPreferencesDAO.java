@@ -200,6 +200,50 @@ public class SmsPreferencesDAO {
         return queryRecipients(type, season, commishOnly);
     }
 
+    /**
+     * PICKS_REMINDER targets: players in the season who are still alive
+     * (initialPicks minus losses > 0), have NO picks rows for this week, are
+     * phone-verified, and are opted in to the Picks Reminder type. Loss SQL
+     * mirrors SqlConnectorCommentaryTable.getSeasonStandings (tie = loss).
+     */
+    public List<UserPhone> getPicksReminderRecipients(int season, int week) {
+        List<UserPhone> recipients = new ArrayList<>();
+        String sql =
+            "SELECT u.idUser, u.cellNumber FROM KOTH.User u " +
+            "JOIN KOTH.sms_notification_types snt ON snt.type_key = 'PICKS_REMINDER' AND snt.active = 1 " +
+            "LEFT JOIN KOTH.user_sms_preferences usp " +
+            "  ON usp.idUser = u.idUser AND usp.notification_type_id = snt.notification_type_id " +
+            "LEFT JOIN ( " +
+            "  SELECT p.userId, SUM(CASE WHEN g.status IN ('STATUS_FINAL','Final','F/OT') AND ( " +
+            "    (p.selectedTeam = g.homeTeamName AND g.homeScore <= g.awayScore) OR " +
+            "    (p.selectedTeam = g.awayTeamName AND g.awayScore <= g.homeScore) " +
+            "  ) THEN 1 ELSE 0 END) AS losses " +
+            "  FROM KOTH.Picks p JOIN KOTH.Game g ON g.GameID = p.gameId " +
+            "  WHERE p.season = ? GROUP BY p.userId " +
+            ") l ON l.userId = u.idUser " +
+            "WHERE u.picksSeason = ? " +
+            "  AND u.phoneVerified = 1 AND u.cellNumber IS NOT NULL " +
+            "  AND COALESCE(usp.enabled, snt.default_enabled) = 1 " +
+            "  AND COALESCE(u.initialPicks, 0) - COALESCE(l.losses, 0) > 0 " +
+            "  AND NOT EXISTS (SELECT 1 FROM KOTH.Picks pw " +
+            "                  WHERE pw.userId = u.idUser AND pw.season = ? AND pw.week = ?)";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, season);
+            ps.setInt(3, season);
+            ps.setInt(4, week);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    recipients.add(new UserPhone(rs.getInt("idUser"), rs.getString("cellNumber")));
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("SmsPreferencesDAO.getPicksReminderRecipients - Error: " + e.getMessage());
+        }
+        return recipients;
+    }
+
     private List<UserPhone> queryRecipients(SmsNotificationType type, Integer season, boolean commishOnly) {
         List<UserPhone> recipients = new ArrayList<>();
         boolean userControlled = type.isUserControlled();

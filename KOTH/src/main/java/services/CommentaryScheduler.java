@@ -4,12 +4,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import helpers.SmsPreferencesDAO;
 import helpers.SqlConnectorCommentaryTable;
 import helpers.SqlConnectorGameTable;
 import helpers.SqlConnectorPicksPriceTable;
 import model.Game;
 import model.PicksPrice;
 import model.RaceEvent;
+import model.SmsNotificationType;
 
 import java.time.Instant;
 import java.util.List;
@@ -53,6 +55,15 @@ public class CommentaryScheduler {
 
     @Autowired
     private NFLGameFetcherService nflGameFetcherService;
+
+    @Autowired
+    private SmsService smsService;
+
+    @Autowired
+    private SmsPreferencesDAO smsPreferencesDAO;
+
+    @org.springframework.beans.factory.annotation.Value("${app.base.url:}")
+    private String appBaseUrl;
 
     @Scheduled(fixedRateString = "${commentary.scheduler.tickMs:60000}")
     public void tick() {
@@ -140,6 +151,91 @@ public class CommentaryScheduler {
         } catch (Exception e) {
             System.err.println("CommentaryScheduler.tickLateDrama - error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Picks reminders — texts players who are still alive but have no picks
+     * for the current week, before the week's first kickoff. Two windows:
+     * morning-of (9am ET on kickoff day) and last call (2 hours before
+     * kickoff). Each window fires once per week via claim(); recipients are
+     * phone-verified, opted in to Picks Reminder, and have zero picks rows.
+     * Runs independently of commentaryEnabled — this is an SMS feature.
+     */
+    @Scheduled(fixedRate = 300000)
+    public void tickPicksReminders() {
+        try {
+            int season = nflSeasonCalculator.getCurrentNFLSeason();
+            int week = nflSeasonCalculator.getCurrentNFLWeekNumber();
+            if (week < 1) return;
+
+            List<Map<String, Object>> gameStates = commentaryTable.getWeekGameStates(season, week);
+            Instant firstKickoff = earliestKickoff(gameStates);
+            if (firstKickoff == null) return;
+
+            Instant now = Instant.now();
+            if (!now.isBefore(firstKickoff)) {
+                return; // week already underway — reminder windows are closed
+            }
+
+            java.time.ZoneId et = java.time.ZoneId.of("America/New_York");
+            Instant morningStart = firstKickoff.atZone(et).toLocalDate()
+                    .atTime(9, 0).atZone(et).toInstant();
+            Instant lastCallStart = firstKickoff.minusSeconds(2 * 60 * 60);
+
+            if (!now.isBefore(lastCallStart)) {
+                if (smsPreferencesDAO.claim(season, week, "PICKS_REMINDER", "lastcall")) {
+                    sendPicksReminders(season, week,
+                        "KOTH: Last call! Week " + week + " kicks off at "
+                        + kickoffTimeEt(firstKickoff) + " ET (about 2 hours) and you haven't made your picks."
+                        + appLinkSuffix());
+                }
+            } else if (!now.isBefore(morningStart)) {
+                if (smsPreferencesDAO.claim(season, week, "PICKS_REMINDER", "morning")) {
+                    sendPicksReminders(season, week,
+                        "KOTH: Week " + week + " kicks off " + kickoffLabel(firstKickoff)
+                        + " ET and you haven't made your picks yet."
+                        + appLinkSuffix());
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("CommentaryScheduler.tickPicksReminders - error (will retry next tick): "
+                    + e.getMessage());
+        }
+    }
+
+    private void sendPicksReminders(int season, int week, String message) {
+        List<SmsPreferencesDAO.UserPhone> recipients =
+                smsPreferencesDAO.getPicksReminderRecipients(season, week);
+        int sent = 0;
+        for (SmsPreferencesDAO.UserPhone r : recipients) {
+            if (smsService.sendNotification(r.userId, r.phoneNumber,
+                    SmsNotificationType.PICKS_REMINDER, message)) {
+                sent++;
+            }
+        }
+        System.out.println("CommentaryScheduler.tickPicksReminders - week " + week
+                + ": " + sent + "/" + recipients.size() + " reminder(s) sent");
+    }
+
+    private Instant earliestKickoff(List<Map<String, Object>> gameStates) {
+        Instant earliest = null;
+        for (Map<String, Object> g : gameStates) {
+            Instant kickoff = parseKickoff((String) g.get("date"));
+            if (kickoff != null && (earliest == null || kickoff.isBefore(earliest))) {
+                earliest = kickoff;
+            }
+        }
+        return earliest;
+    }
+
+    /** Kickoff time-of-day in ET, e.g. "8:20 PM". */
+    private String kickoffTimeEt(Instant kickoff) {
+        return kickoff.atZone(java.time.ZoneId.of("America/New_York"))
+                .format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"));
+    }
+
+    private String appLinkSuffix() {
+        return (appBaseUrl == null || appBaseUrl.isEmpty()) ? "" : " " + appBaseUrl;
     }
 
     // ── M4 internals ───────────────────────────────────────────
