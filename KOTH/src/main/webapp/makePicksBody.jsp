@@ -235,11 +235,22 @@
                             String formattedDate = gameDateTime.format(outputFormatter);
                             String[] dateParts = formattedDate.split(" ", 2);
                             String formattedDateWithBreak = dateParts[0] + "<br>" + dateParts[1];
+                            // Viewer-local kickoff times: ship the UTC instant; JS below
+                            // re-renders in the browser's timezone. Server-rendered ET
+                            // stays as the no-JS fallback. game.date is either the raw
+                            // UTC ISO string or processGameStatus's ET ZonedDateTime.
+                            long kickoffEpochMs = -1;
+                            try {
+                                kickoffEpochMs = java.time.ZonedDateTime
+                                        .parse(game.getDate().matches(".*T\\d{2}:\\d{2}Z")
+                                                ? game.getDate().replace("Z", ":00Z") : game.getDate())
+                                        .toInstant().toEpochMilli();
+                            } catch (Exception ignore) {}
                 %>
                             <div class="col-md-4 mb-3">
                                 <div class="card game-card" id="<%= game.getGameID() %>">
                                     <div class="card-header text-center">
-                                        <strong><%= formattedDateWithBreak %></strong>
+                                        <strong class="js-kickoff" data-epoch="<%= kickoffEpochMs %>"><%= formattedDateWithBreak %></strong>
                                     </div>
                                     <div class="card-body">
                                         <div class="team-info">
@@ -338,6 +349,17 @@
     </div>
 
 <script>
+    // Re-render kickoff times in the viewer's own timezone (server fallback is ET)
+    document.querySelectorAll('.js-kickoff').forEach(function (el) {
+        var ms = parseInt(el.getAttribute('data-epoch'), 10);
+        if (!ms || ms <= 0) return;
+        var d = new Date(ms);
+        var day = d.toLocaleDateString([], { weekday: 'long' });
+        var date = d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' });
+        var time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+        el.innerHTML = day + ' ' + date + '<br>' + time;
+    });
+
     var remainingPicks = ${requestScope.remainingPicks != null ? requestScope.remainingPicks : 0};
     var totalSelectedPicks = 0;
     var gameSelections = {};

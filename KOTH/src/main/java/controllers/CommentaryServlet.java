@@ -116,6 +116,7 @@ public class CommentaryServlet {
             n.put("week", c.getWeek());
             n.put("snark", c.getSnarkLevel());
             n.put("time", c.getCreatedAt() != null ? fmt.format(c.getCreatedAt()) : "");
+            n.put("timeMs", c.getCreatedAt() != null ? c.getCreatedAt().getTime() : 0L);
             n.put("body", c.getBody());
         }
 

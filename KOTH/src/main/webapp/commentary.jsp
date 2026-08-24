@@ -94,7 +94,7 @@
                                 <span class="c-week">Week ${c.week}</span>
                                 <span class="c-snark">snark ${c.snarkLevel}</span>
                             </div>
-                            <span class="c-time">
+                            <span class="c-time js-localtime" data-epoch="${c.createdAt.time}">
                                 <fmt:formatDate value="${c.createdAt}" pattern="EEE h:mm a" />
                             </span>
                         </div>
@@ -112,6 +112,17 @@
 (function () {
     const list = document.getElementById('commentaryList');
     const note = document.getElementById('refNote');
+
+    // Viewer-local timestamps ("Sun 4:32 PM" in the browser's timezone).
+    function localTime(ms) {
+        var d = new Date(ms);
+        return d.toLocaleDateString([], { weekday: 'short' }) + ' '
+             + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    document.querySelectorAll('.js-localtime').forEach(function (el) {
+        var ms = parseInt(el.getAttribute('data-epoch'), 10);
+        if (ms > 0) el.textContent = localTime(ms);
+    });
 
     function badgeLabel(streamType, eventType) {
         if (streamType === 'EVENT' && eventType) return eventType;
@@ -138,7 +149,7 @@
                 + '<span class="c-badge c-badge-' + esc(e.streamType) + '">' + esc(badgeLabel(e.streamType, e.eventType)) + '</span>'
                 + '<span class="c-week">Week ' + e.week + '</span>'
                 + '<span class="c-snark">snark ' + e.snark + '</span>'
-                + '</div><span class="c-time">' + esc(e.time) + '</span></div>'
+                + '</div><span class="c-time">' + esc(e.timeMs > 0 ? localTime(e.timeMs) : e.time) + '</span></div>'
                 + '<div class="c-body">' + esc(e.body) + '</div>'
                 + '</div>';
         }).join('');

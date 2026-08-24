@@ -29,7 +29,7 @@
             </span>
         </div>
         <div class="blurb-right">
-            <span class="blurb-time">
+            <span class="blurb-time" id="blurbTime" data-epoch="${latestCommentary.createdAt.time}">
                 <fmt:formatDate value="${latestCommentary.createdAt}" pattern="EEE h:mm a" />
             </span>
         </div>
@@ -89,6 +89,16 @@
 </style>
 
 <script>
+// Viewer-local timestamp (server fallback renders in the server's timezone)
+(function () {
+    var el = document.getElementById('blurbTime');
+    if (!el) return;
+    var ms = parseInt(el.getAttribute('data-epoch'), 10);
+    if (!ms || ms <= 0) return;
+    var d = new Date(ms);
+    el.textContent = d.toLocaleDateString([], { weekday: 'short' }) + ' '
+                   + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+})();
 function openCommentaryPopout() {
     var width = 520;
     var height = Math.min(window.screen.availHeight - 60, 900);
