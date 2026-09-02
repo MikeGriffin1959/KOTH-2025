@@ -121,11 +121,19 @@ session.removeAttribute("messageType");
     </div>
     <div class="form-group">
             <label for="initialPicks">Number of Initial Picks</label>
-            <select class="form-control" id="initialPicks" name="initialPicks">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
+            <select class="form-control" id="initialPicks" name="initialPicks" <c:if test="${not allowSignUp}">disabled</c:if>>
+                <c:forEach begin="1" end="${maxPicks}" var="i">
+                    <option value="${i}" <c:if test="${currentInitialPicks eq i}">selected</c:if>>${i}</option>
+                </c:forEach>
             </select>
+            <c:choose>
+                <c:when test="${allowSignUp}">
+                    <small class="form-text" style="color:#bbb;">You can change this while signups are open.</small>
+                </c:when>
+                <c:otherwise>
+                    <small class="form-text" style="color:#bbb;">Signups are closed &mdash; contact the commissioner to change your pick count.</small>
+                </c:otherwise>
+            </c:choose>
         </div>
     <button type="submit" class="btn btn-primary">Update</button>
 </form>

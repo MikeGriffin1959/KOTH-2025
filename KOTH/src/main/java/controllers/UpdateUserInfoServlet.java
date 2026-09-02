@@ -1,7 +1,9 @@
 package controllers;
 
 import helpers.SmsPreferencesDAO;
+import helpers.SqlConnectorPicksPriceTable;
 import helpers.SqlConnectorUserTable;
+import model.PicksPrice;
 import model.User;
 import services.PhoneVerificationService;
 import services.ServletUtility;
@@ -38,6 +40,9 @@ public class UpdateUserInfoServlet {
     private services.EmailVerificationService emailVerificationService; // Email verification
 
     @Autowired
+    private SqlConnectorPicksPriceTable picksPriceTable; // maxPicks / allowSignUp gate
+
+    @Autowired
     public UpdateUserInfoServlet(SqlConnectorUserTable sqlConnectorUserTable) {
         this.sqlConnectorUserTable = sqlConnectorUserTable;
     }
@@ -67,6 +72,16 @@ public class UpdateUserInfoServlet {
         model.addAttribute("user", user);
         // SMS notification preferences for the Text Message card
         model.addAttribute("smsPrefs", smsPreferencesDAO.getUserPreferencesDetail(user.getIdUser()));
+
+        // Initial pick count: 1..maxPicks from the season's PicksPrice, editable
+        // only while the commissioner has Allow Signups on.
+        int season = resolveSeason(request);
+        PicksPrice cfg = seasonConfig(season);
+        User seasonRecord = sqlConnectorUserTable.getInitialPickCount(user.getIdUser(), season);
+        model.addAttribute("maxPicks", cfg != null && cfg.getMaxPicks() > 0 ? cfg.getMaxPicks() : 5);
+        model.addAttribute("allowSignUp", cfg != null && cfg.isAllowSignUp());
+        model.addAttribute("currentInitialPicks",
+                seasonRecord != null ? seasonRecord.getInitialPicks() : user.getInitialPicks());
 
         long endTime = System.nanoTime();
         System.out.printf("UpdateUserInfoServlet.doGet Method execution time: %.1f Seconds%n",
@@ -142,6 +157,13 @@ public class UpdateUserInfoServlet {
         // ✅ Update user info in DB
         boolean isUpdated = sqlConnectorUserTable.updateUserInfo(currentUserName, firstName, lastName, userName, email, cellNumber);
 
+        // Initial pick count — server-side gate on Allow Signups regardless of
+        // what the form submitted (the control is disabled client-side too).
+        String picksMessage = "";
+        if (isUpdated && existing != null) {
+            picksMessage = applyInitialPicksChange(request, existing);
+        }
+
         if (isUpdated) {
             if (phoneChanged) {
                 smsPreferencesDAO.clearPhoneVerification(existing.getIdUser());
@@ -159,6 +181,7 @@ public class UpdateUserInfoServlet {
             }
             session.setAttribute("userName", userName);
             redirectAttributes.addFlashAttribute("message", "User information updated successfully."
+                    + picksMessage
                     + (phoneChanged ? " Your new number needs to be re-verified for text messages." : "")
                     + (emailChanged ? " A verification link was sent to your new email address." : ""));
             redirectAttributes.addFlashAttribute("messageType", "success");
@@ -172,6 +195,74 @@ public class UpdateUserInfoServlet {
                 (endTime - startTime) / 1_000_000_000.0);
 
         return "redirect:/UpdateUserInfoServlet";
+    }
+
+    // -------------------------------------------------------------------------
+    // Initial pick count
+    // -------------------------------------------------------------------------
+
+    /**
+     * Apply a requested initial-pick-count change for the current season.
+     * Only honored while PicksPrice.allowSignUp is on; clamped to 1..maxPicks.
+     * Returns a message fragment for the flash message ("" when nothing changed).
+     */
+    private String applyInitialPicksChange(HttpServletRequest request, User existing) {
+        String raw = request.getParameter("initialPicks");
+        if (raw == null || raw.isEmpty()) return "";
+
+        int season = resolveSeason(request);
+        PicksPrice cfg = seasonConfig(season);
+        if (cfg == null || !cfg.isAllowSignUp()) {
+            System.out.println("UpdateUserInfoServlet: initial picks change ignored — signups closed for " + season);
+            return "";
+        }
+        int maxPicks = cfg.getMaxPicks() > 0 ? cfg.getMaxPicks() : 5;
+        int requested;
+        try {
+            requested = Integer.parseInt(raw);
+        } catch (NumberFormatException nfe) {
+            return "";
+        }
+        if (requested < 1 || requested > maxPicks) {
+            return " Pick count must be between 1 and " + maxPicks + " — not changed.";
+        }
+
+        try {
+            User seasonRecord = sqlConnectorUserTable.getInitialPickCount(existing.getIdUser(), season);
+            if (seasonRecord != null) {
+                if (seasonRecord.getInitialPicks() == requested) return "";
+                seasonRecord.setInitialPicks(requested);
+                sqlConnectorUserTable.updateUserPicks(seasonRecord);
+            } else {
+                // Not yet in this season — joining with the requested count (unpaid),
+                // same path the commissioner page uses.
+                User join = new User();
+                join.setIdUser(existing.getIdUser());
+                join.setPicksSeason(season);
+                join.setInitialPicks(requested);
+                join.setPicksPaid(false);
+                sqlConnectorUserTable.addUserPicks(join);
+            }
+            System.out.println("UpdateUserInfoServlet: initial picks set to " + requested
+                    + " for user " + existing.getIdUser() + " season " + season);
+            return " Initial picks set to " + requested + ".";
+        } catch (Exception e) {
+            System.err.println("UpdateUserInfoServlet.applyInitialPicksChange - Error: " + e.getMessage());
+            return " Pick count could not be updated.";
+        }
+    }
+
+    private PicksPrice seasonConfig(int season) {
+        java.util.List<PicksPrice> prices = picksPriceTable.getPickPrices(season);
+        return prices.isEmpty() ? null : prices.get(0);
+    }
+
+    private int resolveSeason(HttpServletRequest request) {
+        Object attr = request.getAttribute("season");
+        if (attr != null) {
+            try { return Integer.parseInt(attr.toString()); } catch (NumberFormatException ignore) {}
+        }
+        return java.time.Year.now().getValue();
     }
 
     // -------------------------------------------------------------------------
