@@ -95,7 +95,8 @@
     <dependency>
       <groupId>com.twilio.sdk</groupId>
       <artifactId>twilio</artifactId>
-      <version>10.1.0</version>
+      <!-- 13.0.0+: 10.0.0-12.1.1 fail on unknown response fields (Twilio advisory, Sep 2026) -->
+      <version>13.0.0</version>
     </dependency>
   </dependencies>
 
