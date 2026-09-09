@@ -77,14 +77,16 @@ public class UpsetDetectionService {
         Double market = orient(edge.getMarketHome(), candidateIsHome);
         Double fpi    = orient(edge.getFpiHome(),    candidateIsHome);
         Double elo    = orient(edge.getEloHome(),    candidateIsHome);
+        Double elway  = orient(edge.getElwayHome(),  candidateIsHome);
         Double blended= orient(edge.getBlendedHome(),candidateIsHome);
 
         // ── MODEL_DIVERGENCE ──
-        // gap between the market and the average of the two models, on this team
+        // gap between the market and the average of the models (FPI / ELO / ELWAY), on this team
         if (market != null) {
             double modelSum = 0; int n = 0;
-            if (fpi != null) { modelSum += fpi; n++; }
-            if (elo != null) { modelSum += elo; n++; }
+            if (fpi   != null) { modelSum += fpi;   n++; }
+            if (elo   != null) { modelSum += elo;   n++; }
+            if (elway != null) { modelSum += elway; n++; }
             if (n > 0) {
                 double modelAvg = modelSum / n;
                 double gap = Math.abs(market - modelAvg);

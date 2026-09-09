@@ -25,6 +25,8 @@ public class GameEdge implements Serializable {
     private Double marketHome;      // P(home win) from spread
     private Double fpiHome;         // P(home win) from ESPN predictor gameProjection
     private Double eloHome;         // P(home win) from our ELO
+    private Double elwayHome;       // P(home win) from Nate Silver's ELWAY (commish-imported)
+    private Double elwaySpreadHome; // ELWAY home spread (negative = home favored)
     private Double blendedHome;     // weighted blend
     private Double predPtDiffHome;  // FPI teamPredPtDiff for home (sanity/cross-check)
 
@@ -34,7 +36,14 @@ public class GameEdge implements Serializable {
     public Double getMarketAway()  { return marketHome  == null ? null : 1.0 - marketHome;  }
     public Double getFpiAway()     { return fpiHome     == null ? null : 1.0 - fpiHome;     }
     public Double getEloAway()     { return eloHome     == null ? null : 1.0 - eloHome;     }
+    public Double getElwayAway()   { return elwayHome   == null ? null : 1.0 - elwayHome;   }
     public Double getBlendedAway() { return blendedHome == null ? null : 1.0 - blendedHome; }
+
+    public Double getElwayHome() { return elwayHome; }
+    public void setElwayHome(Double v) { this.elwayHome = v; }
+
+    public Double getElwaySpreadHome() { return elwaySpreadHome; }
+    public void setElwaySpreadHome(Double v) { this.elwaySpreadHome = v; }
 
     // ── getters / setters ─────────────────────────────────────
     public long getEspnEventId() { return espnEventId; }
@@ -82,7 +91,7 @@ public class GameEdge implements Serializable {
     @Override
     public String toString() {
         return "GameEdge{event=" + espnEventId + ", " + awayTeamId + "@" + homeTeamId +
-               ", mkt=" + marketHome + ", fpi=" + fpiHome + ", elo=" + eloHome +
+               ", mkt=" + marketHome + ", fpi=" + fpiHome + ", elo=" + eloHome + ", elway=" + elwayHome +
                ", blended=" + blendedHome + ", neutral=" + neutralSite + "}";
     }
 }

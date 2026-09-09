@@ -85,8 +85,8 @@ public class SqlConnectorEdgeTable {
             "INSERT INTO KOTH.EdgeSnapshot " +
             "(season, internalWeek, espnEventId, homeTeamId, awayTeamId, kickoffUtc, neutralSite, " +
             " spread, favoriteIsHome, marketHome, marketAway, fpiHome, fpiAway, eloHome, eloAway, " +
-            " blendedHome, blendedAway, predPtDiffHome) " +
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) " +
+            " blendedHome, blendedAway, predPtDiffHome, elwayHome, elwayAway, elwaySpreadHome) " +
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) " +
             "ON DUPLICATE KEY UPDATE " +
             " homeTeamId=VALUES(homeTeamId), awayTeamId=VALUES(awayTeamId), kickoffUtc=VALUES(kickoffUtc), " +
             " neutralSite=VALUES(neutralSite), spread=VALUES(spread), favoriteIsHome=VALUES(favoriteIsHome), " +
@@ -94,7 +94,8 @@ public class SqlConnectorEdgeTable {
             " fpiHome=VALUES(fpiHome), fpiAway=VALUES(fpiAway), " +
             " eloHome=VALUES(eloHome), eloAway=VALUES(eloAway), " +
             " blendedHome=VALUES(blendedHome), blendedAway=VALUES(blendedAway), " +
-            " predPtDiffHome=VALUES(predPtDiffHome)";
+            " predPtDiffHome=VALUES(predPtDiffHome), " +
+            " elwayHome=VALUES(elwayHome), elwayAway=VALUES(elwayAway), elwaySpreadHome=VALUES(elwaySpreadHome)";
 
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -118,6 +119,9 @@ public class SqlConnectorEdgeTable {
             setNullableDouble(ps, 16, e.getBlendedHome());
             setNullableDouble(ps, 17, e.getBlendedAway());
             setNullableDouble(ps, 18, e.getPredPtDiffHome());
+            setNullableDouble(ps, 19, e.getElwayHome());
+            setNullableDouble(ps, 20, e.getElwayAway());
+            setNullableDouble(ps, 21, e.getElwaySpreadHome());
             ps.executeUpdate();
             System.out.println("DEBUG[edge-persist]: snapshot saved " + e);
         } catch (SQLException ex) {
@@ -221,6 +225,8 @@ public class SqlConnectorEdgeTable {
                     e.setEloHome(getNullableDouble(rs, "eloHome"));
                     e.setBlendedHome(getNullableDouble(rs, "blendedHome"));
                     e.setPredPtDiffHome(getNullableDouble(rs, "predPtDiffHome"));
+                    e.setElwayHome(getNullableDouble(rs, "elwayHome"));
+                    e.setElwaySpreadHome(getNullableDouble(rs, "elwaySpreadHome"));
                     list.add(e);
                 }
             }

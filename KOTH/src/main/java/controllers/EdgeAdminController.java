@@ -38,6 +38,8 @@ public class EdgeAdminController {
     @Autowired private helpers.SqlConnectorGameTable gameTable;
     @Autowired private helpers.SqlConnectorEdgeTable edgeTable;
     @Autowired private services.EdgeOrchestrator edgeOrchestrator;
+    @Autowired private services.ElwayImportService elwayImportService;
+    @Autowired private helpers.SqlConnectorElwayTable elwayTable;
 
     /** Snapshots older than this many minutes trigger an auto-rebuild on page load. */
     private static final int STALE_AFTER_MIN = 30;
@@ -115,7 +117,75 @@ public class EdgeAdminController {
         model.addAttribute("applyMessage", request.getParameter("applyMessage"));
         model.addAttribute("applyError", request.getParameter("applyError"));
 
+        // ELWAY import status (rows / weeks covered / last import) for the import card
+        Map<String, Object> elwayStatus = elwayTable.getImportStatus(s);
+        model.addAttribute("elwayRows", elwayStatus.get("rows"));
+        model.addAttribute("elwayWeeks", elwayStatus.get("weeks"));
+        java.sql.Timestamp lastElway = (java.sql.Timestamp) elwayStatus.get("lastImport");
+        model.addAttribute("elwayLastImport", lastElway == null ? null : new java.util.Date(lastElway.getTime()));
+        @SuppressWarnings("unchecked")
+        List<Integer> elwayWeekList = (List<Integer>) elwayStatus.get("weeks");
+        model.addAttribute("elwayHasThisWeek", elwayWeekList != null && elwayWeekList.contains(w));
+
         return "edge";
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // ELWAY IMPORT (Nate Silver / Silver Bulletin)
+    // ════════════════════════════════════════════════════════════
+
+    /**
+     * Paste-in import of the "ELWAY future game projections" table. Parses every
+     * game row (any number of weeks), upserts KOTH.ElwayProjection, then rebuilds
+     * this week's snapshots so the ELWAY column and blend reflect it immediately.
+     */
+    @PostMapping("/edge/elway/import")
+    public String importElway(HttpServletRequest request,
+                              @RequestParam Integer season,
+                              @RequestParam Integer week,
+                              @RequestParam(required = false) String elwayText) {
+        HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute("userName") == null) {
+            return "redirect:/LoginServlet";
+        }
+        Boolean isAdmin = (Boolean) session.getAttribute("isAdmin");
+        if (!Boolean.TRUE.equals(isAdmin)) {
+            return "redirect:/HomeServlet";
+        }
+        if (elwayText == null || elwayText.trim().isEmpty()) {
+            return redirectBack(season, week, null, "Nothing to import — paste the ELWAY projections table first.");
+        }
+
+        services.ElwayImportService.ImportReport rep;
+        try {
+            rep = elwayImportService.importText(elwayText, season);
+        } catch (Exception e) {
+            System.err.println("DEBUG[edge-elway]: import failed: " + e.getMessage());
+            return redirectBack(season, week, null, "ELWAY import failed: " + e.getMessage());
+        }
+        if (rep.parsed == 0) {
+            return redirectBack(season, week, null,
+                    "ELWAY import: no game rows recognized (" + rep.skipped.size()
+                    + " line(s) skipped). Copy the table rows including the Win prob % columns.");
+        }
+
+        // Rebuild this week's snapshots so the new source shows up right away
+        String rebuildNote = "";
+        if (rep.weeks.contains(week)) {
+            try {
+                edgeOrchestrator.runWeeklyEdge(season, week);
+            } catch (Exception e) {
+                rebuildNote = " (snapshot rebuild failed: " + e.getMessage() + ")";
+            }
+        } else {
+            rebuildNote = " (no rows for week " + week + " — current week unchanged)";
+        }
+
+        String msg = "ELWAY import: " + rep.saved + " game(s) saved for week"
+                + (rep.weeks.size() == 1 ? " " : "s ") + rep.weeks
+                + (rep.skipped.isEmpty() ? "" : ", " + rep.skipped.size() + " line(s) skipped")
+                + "." + rebuildNote;
+        return redirectBack(season, week, msg, null);
     }
 
     // ════════════════════════════════════════════════════════════

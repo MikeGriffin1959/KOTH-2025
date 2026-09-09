@@ -10,8 +10,10 @@ import org.springframework.stereotype.Service;
 import helpers.ApiFetchers;
 import helpers.ApiParsers;
 import helpers.EdgeEspnClient;
+import helpers.SqlConnectorElwayTable;
 import helpers.SqlConnectorGameTable;
 import helpers.SqlConnectorEdgeTable;
+import model.ElwayProjection;
 import model.Game;
 import model.GameEdge;
 import services.FpiClient.FpiResult;
@@ -22,12 +24,12 @@ import services.FpiClient.FpiResult;
  * Flow per game:
  *   1. ensure a fresh Vegas spread (reuse existing ApiFetchers/ApiParsers)
  *   2. fetch + parse FPI predictor (gameProjection + team ids + predPtDiff)
- *   3. orient the market spread by FPI (favorite = higher gameProjection)
- *   4. compute market / fpi / elo home win probs + a default blend
- *   5. upsert EdgeSnapshot
+ *   3. look up Nate Silver's ELWAY projection (commish-imported, may be absent)
+ *   4. orient the market spread by FPI (fallback: ELWAY, then raw spread sign)
+ *   5. compute market / fpi / elo / elway home win probs + a default blend
+ *   6. upsert EdgeSnapshot
  * Then persist the current ELO ratings.
  *
- * No UI here (that's M2). Touches no existing class — only calls them.
  * The scheduled run is profile-gated: set edge.scheduler.enabled=true on the
  * prod (8080) instance only, so the dev (8081) instance never double-fires.
  */
@@ -36,19 +38,16 @@ public class EdgeOrchestrator {
 
     @Autowired private SqlConnectorGameTable gameTable;
     @Autowired private SqlConnectorEdgeTable edgeTable;
+    @Autowired private SqlConnectorElwayTable elwayTable;
     @Autowired private EdgeEspnClient espnClient;
     @Autowired private FpiClient fpiClient;
     @Autowired private MarketProbService marketProb;
     @Autowired private EloRatingService eloService;
+    @Autowired private WinProbBlendingService blender;
     @Autowired private NFLSeasonCalculator seasonCalculator;
 
     @Value("${edge.scheduler.enabled:false}")
     private boolean schedulerEnabled;
-
-    // default blend weights (renormalized over whatever sources are present)
-    @Value("${edge.blend.wMarket:0.50}") private double wMarket;
-    @Value("${edge.blend.wFpi:0.25}")    private double wFpi;
-    @Value("${edge.blend.wElo:0.25}")    private double wElo;
 
     /** Weekly schedule: Wed 06:00 server time by default. Gated by edge.scheduler.enabled. */
     @Scheduled(cron = "${edge.cron:0 0 6 * * WED}")
@@ -81,10 +80,15 @@ public class EdgeOrchestrator {
             return;
         }
 
+        // ELWAY projections for the week (empty map if the commish hasn't imported them)
+        Map<String, ElwayProjection> elway = elwayTable.getProjectionsForWeek(season, internalWeek);
+        System.out.println("DEBUG[edge]: " + elway.size() + " ELWAY projection(s) available for "
+                + season + "/wk" + internalWeek);
+
         int built = 0;
         for (Game game : games) {
             try {
-                GameEdge edge = buildEdgeForGame(game, season, internalWeek);
+                GameEdge edge = buildEdgeForGame(game, season, internalWeek, elway);
                 if (edge != null) {
                     edgeTable.upsertSnapshot(edge);
                     built++;
@@ -101,7 +105,8 @@ public class EdgeOrchestrator {
         System.out.println("DEBUG[edge]: runWeeklyEdge complete — " + built + "/" + games.size() + " snapshots");
     }
 
-    private GameEdge buildEdgeForGame(Game game, int season, int internalWeek) {
+    private GameEdge buildEdgeForGame(Game game, int season, int internalWeek,
+                                      Map<String, ElwayProjection> elway) {
         long gameId = game.getGameID();
 
         // 1) fresh Vegas spread via existing fetch/parse (null-aware, unlike the lossy getDouble)
@@ -136,9 +141,26 @@ public class EdgeOrchestrator {
         edge.setHomeTeamId(homeId);
         edge.setAwayTeamId(awayId);
         edge.setKickoffUtc(toSqlDatetimeUtc(game.getDate()));
-        edge.setNeutralSite(false); // M1: neutral-site parsing arrives in M2
+        edge.setNeutralSite(false);
 
-        // 3) orient market by FPI (favorite = side FPI gives the higher win prob).
+        // 3) ELWAY (home-oriented). Accept a reversed home/away listing by mirroring.
+        Double elwayHome = null;
+        ElwayProjection ep = elway.get(homeId + "-" + awayId);
+        if (ep != null) {
+            elwayHome = ep.getHomeWinProb();
+            edge.setElwaySpreadHome(ep.getHomeSpread());
+            if (ep.isNeutralSite()) edge.setNeutralSite(true);
+        } else {
+            ElwayProjection rev = elway.get(awayId + "-" + homeId);
+            if (rev != null) {
+                elwayHome = 1.0 - rev.getHomeWinProb();
+                edge.setElwaySpreadHome(rev.getHomeSpread() == null ? null : -rev.getHomeSpread());
+                if (rev.isNeutralSite()) edge.setNeutralSite(true);
+            }
+        }
+        edge.setElwayHome(elwayHome);
+
+        // 4) orient market by FPI (favorite = side FPI gives the higher win prob).
         //    If the predictor's home/away ids are flipped vs the game row, align to the game's home.
         Boolean favoriteIsHome = null;
         Double fpiHome = null;
@@ -153,15 +175,19 @@ public class EdgeOrchestrator {
         edge.setFpiHome(fpiHome);
         edge.setPredPtDiffHome(predPtDiffHome);
 
-        // If FPI unavailable, fall back to the raw spread sign to orient (home-relative
-        // assumption: negative stored spread => home favored). Logged as a fallback.
+        // FPI unavailable → orient by ELWAY; failing that, the raw spread sign
+        // (home-relative assumption: negative stored spread => home favored). Logged as a fallback.
+        if (favoriteIsHome == null && elwayHome != null) {
+            favoriteIsHome = elwayHome >= 0.5;
+            System.out.println("DEBUG[edge]: FPI unavailable for " + gameId + " — orienting market by ELWAY");
+        }
         if (favoriteIsHome == null && spread != null) {
             favoriteIsHome = spread < 0;
-            System.out.println("DEBUG[edge]: FPI unavailable for " + gameId +
+            System.out.println("DEBUG[edge]: FPI/ELWAY unavailable for " + gameId +
                                " — orienting market by raw spread sign (unverified)");
         }
 
-        // 4a) market
+        // 5a) market
         Double marketHome = null;
         if (spread != null && favoriteIsHome != null) {
             marketHome = marketProb.homeWinProb(Math.abs(spread), favoriteIsHome);
@@ -170,23 +196,14 @@ public class EdgeOrchestrator {
         }
         edge.setMarketHome(marketHome);
 
-        // 4b) elo
+        // 5b) elo
         double eloHome = eloService.homeWinProb(homeId, awayId, edge.isNeutralSite());
         edge.setEloHome(eloHome);
 
-        // 4c) blend (renormalized over present sources)
-        edge.setBlendedHome(blend(marketHome, fpiHome, eloHome));
+        // 5c) blend (renormalized over present sources)
+        edge.setBlendedHome(blender.blend(marketHome, fpiHome, eloHome, elwayHome));
 
         return edge;
-    }
-
-    /** Weighted blend over whichever of market/fpi/elo are non-null; weights renormalize. */
-    private Double blend(Double market, Double fpi, Double elo) {
-        double num = 0, den = 0;
-        if (market != null) { num += wMarket * market; den += wMarket; }
-        if (fpi    != null) { num += wFpi    * fpi;    den += wFpi; }
-        if (elo    != null) { num += wElo    * elo;    den += wElo; }
-        return den == 0 ? null : num / den;
     }
 
     /** ESPN date ("2025-09-08T20:15Z" / "...:00Z") → SQL 'yyyy-MM-dd HH:mm:ss' (UTC). */

@@ -27,6 +27,7 @@ public class EdgeCandidate implements Serializable {
     private Double marketProb;
     private Double fpiProb;
     private Double eloProb;
+    private Double elwayProb;       // Nate Silver's ELWAY (null when not imported for this week)
     private Double blendedProb;
 
     private List<String> upsetFlags = new ArrayList<>();
@@ -77,6 +78,9 @@ public class EdgeCandidate implements Serializable {
 
     public Double getEloProb() { return eloProb; }
     public void setEloProb(Double v) { this.eloProb = v; }
+
+    public Double getElwayProb() { return elwayProb; }
+    public void setElwayProb(Double v) { this.elwayProb = v; }
 
     public Double getBlendedProb() { return blendedProb; }
     public void setBlendedProb(Double v) { this.blendedProb = v; }

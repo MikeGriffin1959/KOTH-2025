@@ -128,6 +128,7 @@ public class EdgeCandidateService {
         c.setMarketProb(orient(edge.getMarketHome(), candidateIsHome));
         c.setFpiProb(orient(edge.getFpiHome(), candidateIsHome));
         c.setEloProb(orient(edge.getEloHome(), candidateIsHome));
+        c.setElwayProb(orient(edge.getElwayHome(), candidateIsHome));
         c.setBlendedProb(orient(blendedHome, candidateIsHome));
 
         // names: prefer the getGamesForWeek display names, fall back to team short name

@@ -126,8 +126,8 @@ public class KothTriageClient {
         sb.append("In this pool there is NO restriction on reusing teams, so each week is ");
         sb.append("independent and the only goal is to pick teams that WIN OUTRIGHT this week ");
         sb.append("(a tie counts as a loss). You are given several candidate favorites with ");
-        sb.append("their market-implied win probability, two model probabilities (ESPN FPI and ");
-        sb.append("an internal ELO), a blended probability, and any situational flags already ");
+        sb.append("their market-implied win probability, model probabilities (ESPN FPI, ");
+        sb.append("an internal ELO, and Nate Silver's ELWAY when available), a blended probability, and any situational flags already ");
         sb.append("detected (divisional game, short rest, travel, model/market divergence, thin edge).\n\n");
         sb.append("Your job: judge which candidates are the SAFEST survivor picks — i.e., least ");
         sb.append("likely to lose — and explicitly call out upset risk the numbers may understate ");
@@ -153,6 +153,7 @@ public class KothTriageClient {
             sb.append("market=").append(pct(c.getMarketProb()))
               .append(", FPI=").append(pct(c.getFpiProb()))
               .append(", ELO=").append(pct(c.getEloProb()))
+              .append(", ELWAY=").append(pct(c.getElwayProb()))
               .append(", blended=").append(pct(c.getBlendedProb()));
             if (c.hasFlags()) sb.append("; flags: ").append(c.getFlagsDisplay());
             sb.append("\n");

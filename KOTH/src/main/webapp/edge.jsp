@@ -330,6 +330,7 @@
 		                        <th style="text-align:left;">Opponent</th>
 		                        <th>Site</th>
 		                        <th>Market</th>
+		                        <th title="Nate Silver's ELWAY (Silver Bulletin) - imported by the commissioner">Elway</th>
 		                        <th>FPI</th>
 		                        <th>ELO</th>
 		                        <th>Blended</th>
@@ -360,6 +361,12 @@
 		                                <c:choose>
 		                                    <c:when test="${c.marketProb != null}"><fmt:formatNumber value="${c.marketProb * 100}" maxFractionDigits="1"/>%</c:when>
 		                                    <c:otherwise><span class="muted">—</span></c:otherwise>
+		                                </c:choose>
+		                            </td>
+		                            <td class="pct">
+		                                <c:choose>
+		                                    <c:when test="${c.elwayProb != null}"><fmt:formatNumber value="${c.elwayProb * 100}" maxFractionDigits="1"/>%</c:when>
+		                                    <c:otherwise><span class="muted">&mdash;</span></c:otherwise>
 		                                </c:choose>
 		                            </td>
 		                            <td class="pct">
@@ -415,6 +422,7 @@
 		                probability &mdash; so a clean favorite can outrank a higher-probability team that carries flags.
 		                Highlighted rows (★) are where your lives are allocated. Checkboxes are pre-selected to the
 		                allocation; uncheck or check rows to override before applying.
+		                Blend weights: market 40% &middot; Elway 25% &middot; FPI 20% &middot; ELO 15% (renormalized when a source is missing).
 		            </div>
 		
 		            <script>
@@ -457,7 +465,45 @@
 		            </script>
 		        </c:otherwise>
 		    </c:choose>
-		
+
+		    <%-- ═════════════════════════ ELWAY IMPORT ═════════════════════════ --%>
+		    <div class="edge-card" style="margin-top:18px;">
+		        <div style="padding:12px 14px;">
+		            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:8px;">
+		                <strong style="font-size:1rem;"><i class="fas fa-chart-line" style="color:#1A43BF;"></i> Nate Silver's ELWAY projections</strong>
+		                <c:choose>
+		                    <c:when test="${elwayHasThisWeek}">
+		                        <span class="built" style="margin-left:0; color:#81c784;"><i class="fas fa-check"></i> Week ${week} loaded</span>
+		                    </c:when>
+		                    <c:otherwise>
+		                        <span class="built" style="margin-left:0; color:#ffc107;"><i class="fas fa-exclamation-triangle"></i> Week ${week} not imported yet</span>
+		                    </c:otherwise>
+		                </c:choose>
+		                <c:if test="${elwayRows > 0}">
+		                    <span class="built" style="margin-left:0;">
+		                        ${elwayRows} game(s) &middot; weeks ${elwayWeeks}
+		                        <c:if test="${elwayLastImport != null}"> &middot; last import <fmt:formatDate value="${elwayLastImport}" pattern="MMM d, h:mm a"/></c:if>
+		                    </span>
+		                </c:if>
+		            </div>
+		            <div class="sub" style="margin-bottom:8px;">
+		                On the Silver Bulletin ELWAY page, select the rows of the <em>"ELWAY future game projections"</em> table
+		                (Wk &middot; Home &middot; Win prob &middot; Away &middot; Win prob &middot; Home spread &middot; Total), copy, and paste below.
+		                Multiple weeks at once are fine &mdash; each row's Wk column is used. Re-importing a week overwrites it.
+		            </div>
+		            <form method="post" action="${pageContext.request.contextPath}/edge/elway/import">
+		                <input type="hidden" name="season" value="${season}"/>
+		                <input type="hidden" name="week" value="${week}"/>
+		                <textarea name="elwayText" rows="6"
+		                          style="width:100%; background:#111; color:#eee; border:1px solid #555; border-radius:4px; padding:8px; font-family:monospace; font-size:0.8rem;"
+		                          placeholder="1    SEA   24.4   69.9%   NE   18.0   29.6%   -6   42&#10;1 N  LAR   25.5   57.6%   SF   22.8   41.8%   -3   48&#10;..."></textarea>
+		                <button type="submit" class="apply-btn" style="margin-top:8px; background:#1A43BF;">
+		                    <i class="fas fa-file-import"></i> Import ELWAY &amp; rebuild Week ${week}
+		                </button>
+		            </form>
+		        </div>
+		    </div>
+
 		</div>
 	</div>
 
