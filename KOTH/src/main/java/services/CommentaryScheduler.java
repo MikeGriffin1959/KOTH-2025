@@ -62,8 +62,55 @@ public class CommentaryScheduler {
     @Autowired
     private SmsPreferencesDAO smsPreferencesDAO;
 
+    @Autowired
+    private helpers.SqlConnectorElwayTable elwayTable;
+
     @org.springframework.beans.factory.annotation.Value("${app.base.url:}")
     private String appBaseUrl;
+
+    /**
+     * ELWAY freshness nag — the Edge advisor's Nate Silver source is a manual
+     * paste-in (the Substack embeds can't be fetched), so make sure it happens
+     * at least weekly: if the current week's projections aren't loaded by
+     * Tuesday 9am ET, text the commissioners; again Wednesday if still missing.
+     * Each nudge fires once per week via claim(). Silent once the week is loaded
+     * or once the week's first game has kicked off.
+     */
+    @Scheduled(fixedRate = 600000)
+    public void tickElwayReminder() {
+        try {
+            int season = nflSeasonCalculator.getCurrentNFLSeason();
+            int week = nflSeasonCalculator.getCurrentNFLWeekNumber();
+            if (week < 1) return;
+
+            java.time.ZonedDateTime nowEt = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/New_York"));
+            java.time.DayOfWeek dow = nowEt.getDayOfWeek();
+            if (dow != java.time.DayOfWeek.TUESDAY && dow != java.time.DayOfWeek.WEDNESDAY) return;
+            if (nowEt.getHour() < 9) return;
+
+            List<Map<String, Object>> gameStates = commentaryTable.getWeekGameStates(season, week);
+            Instant firstKickoff = earliestKickoff(gameStates);
+            if (firstKickoff == null || !Instant.now().isBefore(firstKickoff)) return;
+
+            @SuppressWarnings("unchecked")
+            List<Integer> loadedWeeks = (List<Integer>) elwayTable.getImportStatus(season).get("weeks");
+            if (loadedWeeks != null && loadedWeeks.contains(week)) return;
+
+            String refKey = dow == java.time.DayOfWeek.TUESDAY ? "tue" : "wed";
+            if (!smsPreferencesDAO.claim(season, week, "ELWAY_REMINDER", refKey)) return;
+
+            String msg = "[KOTH] Edge: Week " + week + " ELWAY projections aren't loaded yet"
+                    + (dow == java.time.DayOfWeek.WEDNESDAY ? " (kickoff is coming up)" : "")
+                    + ". Paste the Silver Bulletin table on the Edge page"
+                    + (appBaseUrl == null || appBaseUrl.isEmpty() ? "" : ": " + appBaseUrl + "/edge")
+                    + " — or ask Claude to refresh Elway.";
+            int sent = smsService.broadcastToSeason(SmsNotificationType.ACCOUNT_ALERT, season, true, msg);
+            System.out.println("CommentaryScheduler.tickElwayReminder - week " + week + " (" + refKey
+                    + "): nudged " + sent + " commissioner(s)");
+        } catch (Exception e) {
+            System.err.println("CommentaryScheduler.tickElwayReminder - error: " + e.getMessage());
+        }
+    }
 
     @Scheduled(fixedRateString = "${commentary.scheduler.tickMs:60000}")
     public void tick() {
