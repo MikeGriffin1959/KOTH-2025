@@ -153,11 +153,13 @@ public class HomeServlet {
             // can never leave picks masked after the game is underway.
             java.util.Set<String> revealedTeams = new java.util.HashSet<>();
             java.util.Set<String> revealedGameIds = new java.util.HashSet<>();
+            Map<String, Long> teamKickoff = new HashMap<>();   // abbrev -> kickoff epoch ms (tile ordering)
             calculateTeamPickCountsAndResults(allWeeksData, weekInt, teamPickCounts, teamResults,
                     (Map<String, String>) context.getAttribute("teamNameToAbbrev"),
-                    revealedTeams, revealedGameIds);
+                    revealedTeams, revealedGameIds, teamKickoff);
             request.setAttribute("revealedTeams", revealedTeams);
             request.setAttribute("revealedGameIds", revealedGameIds);
+            request.setAttribute("teamKickoff", teamKickoff);
 
             // ✅ Prepare user full names
             List<String> allUsers = (List<String>) session.getAttribute("allUsers");
@@ -286,7 +288,8 @@ public class HomeServlet {
 	                                               Map<String, Boolean> teamResults,
 	                                               Map<String, String> teamNameToAbbrev,
 	                                               java.util.Set<String> revealedTeams,
-	                                               java.util.Set<String> revealedGameIds) {
+	                                               java.util.Set<String> revealedGameIds,
+	                                               Map<String, Long> teamKickoff) {
 
 	    if (teamNameToAbbrev == null) {
 	        System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
@@ -308,6 +311,12 @@ public class HomeServlet {
 	                    && !"STATUS_SCHEDULED".equalsIgnoreCase(st) && !"Scheduled".equalsIgnoreCase(st);
 	            java.time.Instant kickoff = parseKickoffInstant((String) game.get("date"));
 	            boolean kickedOff = kickoff != null && !kickoff.isAfter(now);
+	            if (kickoff != null) {
+	                String h = teamNameToAbbrev.get((String) game.get("homeTeamName"));
+	                String a = teamNameToAbbrev.get((String) game.get("awayTeamName"));
+	                if (h != null) teamKickoff.put(h, kickoff.toEpochMilli());
+	                if (a != null) teamKickoff.put(a, kickoff.toEpochMilli());
+	            }
 	            if (statusStarted || kickedOff) {
 	                revealedGameIds.add(gameEntry.getKey());
 	                String h = teamNameToAbbrev.get((String) game.get("homeTeamName"));

@@ -68,6 +68,8 @@ java.util.Set<String> revealedTeams = (java.util.Set<String>) request.getAttribu
 if (revealedTeams == null) revealedTeams = new java.util.HashSet<>();
 java.util.Set<String> revealedGameIds = (java.util.Set<String>) request.getAttribute("revealedGameIds");
 if (revealedGameIds == null) revealedGameIds = new java.util.HashSet<>();
+Map<String, Long> teamKickoff = (Map<String, Long>) request.getAttribute("teamKickoff");
+if (teamKickoff == null) teamKickoff = new HashMap<>();
 String currentUserName = (String) request.getAttribute("currentUserName");
 
 %>
@@ -584,7 +586,28 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 
                        if (teamPickCounts != null && !teamPickCounts.isEmpty()) {
                            List<Map.Entry<String, Integer>> sortedTeams = new ArrayList<>(teamPickCounts.entrySet());
-                           Collections.sort(sortedTeams, (a, b) -> b.getValue().compareTo(a.getValue()));
+                           // Tile order: revealed teams first (most picks first), then masked teams by
+                           // kickoff time (next to unmask on top), alphabetical tiebreak. Masked tiles are
+                           // deliberately NOT ordered by pick count — that would leak hidden popularity.
+                           final boolean maskOn = maskPicks;
+                           final Map<String, Boolean> resultsRef = teamResults;
+                           final java.util.Set<String> revealedRef = revealedTeams;
+                           final Map<String, Long> kickoffRef = teamKickoff;
+                           final Map<String, String> abbrRef = teamNameToAbbrev;
+                           Collections.sort(sortedTeams, (a, b) -> {
+                               String aa = abbrRef.getOrDefault(a.getKey(), a.getKey());
+                               String ab = abbrRef.getOrDefault(b.getKey(), b.getKey());
+                               boolean ra = !maskOn || revealedRef.contains(aa) || resultsRef.containsKey(aa);
+                               boolean rb = !maskOn || revealedRef.contains(ab) || resultsRef.containsKey(ab);
+                               if (ra != rb) return ra ? -1 : 1;
+                               if (ra) {
+                                   int c = b.getValue().compareTo(a.getValue());
+                                   return c != 0 ? c : aa.compareTo(ab);
+                               }
+                               long ka = kickoffRef.getOrDefault(aa, Long.MAX_VALUE);
+                               long kb = kickoffRef.getOrDefault(ab, Long.MAX_VALUE);
+                               return ka != kb ? Long.compare(ka, kb) : aa.compareTo(ab);
+                           });
 
                            for (Map.Entry<String, Integer> entry : sortedTeams) {
                                String teamName = entry.getKey();
