@@ -72,6 +72,21 @@ public class ApiFetchers {
         return fetchDataFromApi(urlString);
     }
 
+    // sports.core.api.espn.com — the one ESPN host that has never challenged the app
+    // (odds + FPI already come from it). Per-game status and per-competitor score.
+    private static final String ESPN_CORE_EVENT_URL =
+        "https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/%s/competitions/%s";
+
+    /** Game status JSON: {period, displayClock, type:{name:"STATUS_FINAL", state:"post", ...}} or null. */
+    public static String FetchESPNCoreStatus(long gameId) {
+        return fetchDataFromApi(String.format(ESPN_CORE_EVENT_URL, gameId, gameId) + "/status");
+    }
+
+    /** Competitor score JSON: {value: 13.0, displayValue: "13", ...} or null. */
+    public static String FetchESPNCoreScore(long gameId, int teamId) {
+        return fetchDataFromApi(String.format(ESPN_CORE_EVENT_URL, gameId, gameId) + "/competitors/" + teamId + "/score");
+    }
+
     /** cdn.espn.com wraps the scoreboard as {"content":{"sbData":{...}}}; return sbData as JSON text. */
     private static String unwrapSbData(String body) {
         if (body == null || body.isEmpty()) return null;
