@@ -222,8 +222,15 @@
                             Integer awayPickCount = teamPickCounts != null ? teamPickCounts.get(awayTeamName) : null;
                             Integer homePickCount = teamPickCounts != null ? teamPickCounts.get(homeTeamName) : null;
                             
-                            //  Mask Picks: determine if pick counts should be hidden for this game
-                            boolean maskThisGame = maskPicks && "Scheduled".equals(game.getStatus());
+                            //  Mask Picks: hide pick counts only until kickoff — by ESPN status OR by
+                            //  kickoff time, so a failed status refresh can't keep a live game masked.
+                            boolean kickoffPassed = false;
+                            try {
+                                String kd = game.getDate().matches(".*T\\d{2}:\\d{2}Z")
+                                        ? game.getDate().replace("Z", ":00Z") : game.getDate();
+                                kickoffPassed = !java.time.ZonedDateTime.parse(kd).toInstant().isAfter(java.time.Instant.now());
+                            } catch (Exception ignore) {}
+                            boolean maskThisGame = maskPicks && "Scheduled".equals(game.getStatus()) && !kickoffPassed;
                             
                             LocalDateTime gameDateTime = LocalDateTime.parse(game.getDate(), DateTimeFormatter.ISO_DATE_TIME);
                             String formattedDate = gameDateTime.format(outputFormatter);

@@ -246,6 +246,9 @@
                                                 ? game.getDate().replace("Z", ":00Z") : game.getDate())
                                         .toInstant().toEpochMilli();
                             } catch (Exception ignore) {}
+                            // Lock the card once kickoff has passed even if ESPN's status is stale
+                            boolean kickoffPassed = kickoffEpochMs > 0 && kickoffEpochMs <= System.currentTimeMillis();
+                            String clickStatus = kickoffPassed && "Scheduled".equals(game.getStatus()) ? "Locked" : game.getStatus();
                 %>
                             <div class="col-md-4 mb-3">
                                 <div class="card game-card" id="<%= game.getGameID() %>">
@@ -255,7 +258,7 @@
                                     <div class="card-body">
                                         <div class="team-info">
                                             <div class="team-score">
-                                                <div class="team-name" onclick="selectTeam(this.querySelector('.team-logo'), '<%= game.getGameID() %>', '<%= awayTeamName %>', '<%= game.getStatus() %>')">
+                                                <div class="team-name" onclick="selectTeam(this.querySelector('.team-logo'), '<%= game.getGameID() %>', '<%= awayTeamName %>', '<%= clickStatus %>')">
                                                     <div class="team-logo-container">
                                                         <img src="<%= awayLogoPath %>"
                                                              alt="<%= awayTeamName %>"
@@ -279,7 +282,7 @@
                                                 </span>
                                             </div>
                                             <div class="team-score">
-                                                <div class="team-name" onclick="selectTeam(this.querySelector('.team-logo'), '<%= game.getGameID() %>', '<%= homeTeamName %>', '<%= game.getStatus() %>')">
+                                                <div class="team-name" onclick="selectTeam(this.querySelector('.team-logo'), '<%= game.getGameID() %>', '<%= homeTeamName %>', '<%= clickStatus %>')">
                                                     <div class="team-logo-container">
                                                         <img src="<%= homeLogoPath %>"
                                                              alt="<%= homeTeamName %>"

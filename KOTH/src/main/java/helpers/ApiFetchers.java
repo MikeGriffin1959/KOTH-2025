@@ -14,6 +14,12 @@ public class ApiFetchers {
  
     private static final String ESPN_FULL_SEASON_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?limit=1000&dates=";
     private static final String ESPN_WEEKLY_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?limit=1000";
+    // ESPN's site API started returning 403 (Akamai) in Sep 2026, which silently froze
+    // score/status refreshes. The CDN "xhr" endpoint serves the identical scoreboard
+    // object under content.sbData, so it is now the primary source (site API = fallback).
+    private static final String ESPN_CDN_SCOREBOARD_URL = "https://cdn.espn.com/core/nfl/scoreboard?xhr=1&limit=1000";
+    private static final String BROWSER_UA =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
     private static final String ESPN_TEAMS_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams";
     private static final String ESPN_ODDS_BASE_URL = "https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/%s/competitions/%s/odds";
     
@@ -44,13 +50,41 @@ public class ApiFetchers {
         
         // Convert internal week number to ESPN API week number
         int espnWeek = convertToESPNWeek(seasonType, gameWeek);
-        
-        String urlString = ESPN_WEEKLY_SCOREBOARD_URL + 
+
+        // Primary: CDN xhr endpoint (unwrap content.sbData → same shape as the site API)
+        int season = new services.NFLSeasonCalculator().getCurrentNFLSeason();
+        String cdnUrl = ESPN_CDN_SCOREBOARD_URL +
+                        "&year=" + season +
+                        "&seasontype=" + seasonType.getValue() +
+                        "&week=" + espnWeek;
+        System.out.println("Requesting URL: " + cdnUrl);
+        String sbData = unwrapSbData(fetchDataFromApi(cdnUrl));
+        if (sbData != null) {
+            return sbData;
+        }
+        System.err.println("ApiFetchers.FetchESPNWeeklyScoreboard: CDN scoreboard unavailable — falling back to site API");
+
+        String urlString = ESPN_WEEKLY_SCOREBOARD_URL +
                           "&seasontype=" + seasonType.getValue() +
                           "&week=" + espnWeek;
-        
+
         System.out.println("Requesting URL: " + urlString);
         return fetchDataFromApi(urlString);
+    }
+
+    /** cdn.espn.com wraps the scoreboard as {"content":{"sbData":{...}}}; return sbData as JSON text. */
+    private static String unwrapSbData(String body) {
+        if (body == null || body.isEmpty()) return null;
+        try {
+            org.json.JSONObject root = new org.json.JSONObject(body);
+            org.json.JSONObject content = root.optJSONObject("content");
+            org.json.JSONObject sb = content == null ? null : content.optJSONObject("sbData");
+            if (sb == null || !sb.has("events")) return null;
+            return sb.toString();
+        } catch (Exception e) {
+            System.err.println("ApiFetchers.unwrapSbData: " + e.getMessage());
+            return null;
+        }
     }
 
     private static int convertToESPNWeek(NFLSeasonType seasonType, NFLGameWeek gameWeek) {
@@ -117,9 +151,15 @@ public class ApiFetchers {
             URL url = new URL(urlString);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
+            // Browser-like headers: ESPN's edge rejects the default Java user agent.
+            connection.setRequestProperty("User-Agent", BROWSER_UA);
+            connection.setRequestProperty("Accept", "application/json, text/plain, */*");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(20000);
             // Check if the response code is successful (200 OK)
             if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                throw new IOException("API request failed with response code: " + connection.getResponseCode());
+                throw new IOException("API request failed with response code: " + connection.getResponseCode()
+                        + " for " + urlString);
             }
             BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
             String line;

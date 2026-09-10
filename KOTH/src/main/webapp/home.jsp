@@ -63,6 +63,11 @@ if (teamResults == null) teamResults = new HashMap<>();
 // ✅ Mask Picks attributes
 Boolean maskPicks = (Boolean) request.getAttribute("maskPicks");
 if (maskPicks == null) maskPicks = false;
+// Games that have kicked off (by ESPN status OR by kickoff time) — picks for these are never masked
+java.util.Set<String> revealedTeams = (java.util.Set<String>) request.getAttribute("revealedTeams");
+if (revealedTeams == null) revealedTeams = new java.util.HashSet<>();
+java.util.Set<String> revealedGameIds = (java.util.Set<String>) request.getAttribute("revealedGameIds");
+if (revealedGameIds == null) revealedGameIds = new java.util.HashSet<>();
 String currentUserName = (String) request.getAttribute("currentUserName");
 
 %>
@@ -595,6 +600,9 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                                    resultClass = teamResults.get(teamAbbr) ? "winner" : "loser";
                                    gameRevealed = true;
                                }
+                               if (revealedTeams.contains(teamAbbr)) {
+                                   gameRevealed = true;   // kicked off (in progress or final)
+                               }
                                
                                // ✅ Mask Picks: show NFL shield for teams whose game hasn't kicked off
                                boolean maskedTeam = maskPicks && !gameRevealed;
@@ -746,8 +754,10 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 												    String pickStatus = (String) pick.get("status");
 												    
 												    // ✅ Mask Picks: mask other users' picks for games that haven't kicked off
-												    boolean maskThisPick = maskPicks 
-												        && "STATUS_SCHEDULED".equals(pickStatus) 
+												    // (kickoff time counts, not just ESPN status — see HomeServlet.revealedGameIds)
+												    boolean maskThisPick = maskPicks
+												        && "STATUS_SCHEDULED".equals(pickStatus)
+												        && !revealedGameIds.contains(String.valueOf(pick.get("gameId")))
 												        && !user.equals(currentUserName);
 												    
 												    String gridLogo = maskThisPick

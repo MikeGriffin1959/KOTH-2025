@@ -148,8 +148,16 @@ public class HomeServlet {
             // ✅ Calculate team pick counts and results
             Map<String, Integer> teamPickCounts = new HashMap<>();
             Map<String, Boolean> teamResults = new HashMap<>();
+            // Games that have started (status no longer scheduled OR kickoff time has passed).
+            // Kickoff time is authoritative for unmasking so a failed ESPN status refresh
+            // can never leave picks masked after the game is underway.
+            java.util.Set<String> revealedTeams = new java.util.HashSet<>();
+            java.util.Set<String> revealedGameIds = new java.util.HashSet<>();
             calculateTeamPickCountsAndResults(allWeeksData, weekInt, teamPickCounts, teamResults,
-                    (Map<String, String>) context.getAttribute("teamNameToAbbrev"));
+                    (Map<String, String>) context.getAttribute("teamNameToAbbrev"),
+                    revealedTeams, revealedGameIds);
+            request.setAttribute("revealedTeams", revealedTeams);
+            request.setAttribute("revealedGameIds", revealedGameIds);
 
             // ✅ Prepare user full names
             List<String> allUsers = (List<String>) session.getAttribute("allUsers");
@@ -276,19 +284,37 @@ public class HomeServlet {
 	private void calculateTeamPickCountsAndResults(Map<Integer, Map<String, List<Map<String, Object>>>> optimizedData,
 	                                               int currentWeekInt, Map<String, Integer> teamPickCounts,
 	                                               Map<String, Boolean> teamResults,
-	                                               Map<String, String> teamNameToAbbrev) {
-	
+	                                               Map<String, String> teamNameToAbbrev,
+	                                               java.util.Set<String> revealedTeams,
+	                                               java.util.Set<String> revealedGameIds) {
+
 	    if (teamNameToAbbrev == null) {
 	        System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
 	        return;
 	    }
-	
+
 	    Map<String, List<Map<String, Object>>> weekData = optimizedData.get(currentWeekInt);
 	    if (weekData == null) return;
-	
-	    for (List<Map<String, Object>> gamePicks : weekData.values()) {
+
+	    java.time.Instant now = java.time.Instant.now();
+	    for (Map.Entry<String, List<Map<String, Object>>> gameEntry : weekData.entrySet()) {
+	        List<Map<String, Object>> gamePicks = gameEntry.getValue();
 	        if (!gamePicks.isEmpty()) {
 	            Map<String, Object> game = gamePicks.get(0);
+
+	            // Started? Either ESPN says so, or the kickoff instant has passed.
+	            String st = game.get("status") == null ? "" : game.get("status").toString();
+	            boolean statusStarted = !st.isEmpty()
+	                    && !"STATUS_SCHEDULED".equalsIgnoreCase(st) && !"Scheduled".equalsIgnoreCase(st);
+	            java.time.Instant kickoff = parseKickoffInstant((String) game.get("date"));
+	            boolean kickedOff = kickoff != null && !kickoff.isAfter(now);
+	            if (statusStarted || kickedOff) {
+	                revealedGameIds.add(gameEntry.getKey());
+	                String h = teamNameToAbbrev.get((String) game.get("homeTeamName"));
+	                String a = teamNameToAbbrev.get((String) game.get("awayTeamName"));
+	                if (h != null) revealedTeams.add(h);
+	                if (a != null) revealedTeams.add(a);
+	            }
 	
 	            // Count picks. Normalize to the abbreviation before merging — legacy rows
 	            // stored mascot names ("Bills") alongside abbreviations ("BUF"), which
@@ -319,6 +345,18 @@ public class HomeServlet {
 	                }
 	            }
 	        }
+	    }
+	}
+
+	/** game.date is ISO UTC, sometimes minutes-only ("2026-09-10T00:20Z"); null if unparseable. */
+	private java.time.Instant parseKickoffInstant(String date) {
+	    if (date == null || date.isEmpty()) return null;
+	    String d = date.trim();
+	    if (d.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}Z")) d = d.substring(0, d.length() - 1) + ":00Z";
+	    try {
+	        return java.time.ZonedDateTime.parse(d).toInstant();
+	    } catch (Exception e) {
+	        return null;
 	    }
 	}
 }

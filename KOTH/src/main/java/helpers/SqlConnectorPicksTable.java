@@ -284,6 +284,7 @@ public class SqlConnectorPicksTable {
 	        pickData.put("homeScore", rs.getInt("homeScore"));
 	        pickData.put("awayScore", rs.getInt("awayScore"));
 	        pickData.put("status", rs.getString("status"));
+	        pickData.put("date", rs.getString("date"));   // kickoff, ISO UTC ("2026-09-10T00:20Z")
 	        pickData.put("homeTeamName", rs.getString("homeTeamName"));
 	        pickData.put("awayTeamName", rs.getString("awayTeamName"));
 	        pickData.put("picksPaid", rs.getBoolean("picksPaid"));
@@ -345,7 +346,7 @@ public class SqlConnectorPicksTable {
 		        Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData = new HashMap<>();
 
 		        String sql = "SELECT u.idUser, u.userName, p.week, p.gameId, p.selectedTeam, " +
-		                     "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, " +
+		                     "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, " +
 		                     "ht.apiTeamName AS homeTeamName, at.apiTeamName AS awayTeamName, " +
 		                     "u.picksPaid, u.initialPicks " +
 		                     "FROM KOTH.User u " +

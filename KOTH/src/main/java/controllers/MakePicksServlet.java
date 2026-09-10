@@ -226,6 +226,20 @@ public class MakePicksServlet {
             return doGet(request, response, model);
         }
 
+        // Kickoff lock (server-side): games already underway keep the user's EXISTING
+        // picks; whatever was submitted for them is ignored. The form disables those
+        // cards, but a stale ESPN status or a crafted request must not get around it.
+        // (Commissioner override goes through its own servlet and is exempt.)
+        newPicks = lockStartedGames(newPicks,
+                sqlConnectorPicksTable.getUserPicks(userId, seasonInt, weekInt),
+                sqlConnectorGameTable.getGamesForWeek(seasonInt, weekInt));
+        int total = 0;
+        for (List<String> l : newPicks.values()) total += l.size();
+        if (total > remainingPicks) {
+            request.setAttribute("errorMessage", "Cannot submit more picks than remaining (picks on games already started are locked).");
+            return doGet(request, response, model);
+        }
+
         try {
             sqlConnectorPicksTable.updateUserPicks(userId, seasonInt, weekInt, newPicks);
             request.setAttribute("message", "Picks successfully updated!");
@@ -236,6 +250,51 @@ public class MakePicksServlet {
         return doGet(request, response, model);
     }
 
+
+    /**
+     * For every game that has started (ESPN status no longer scheduled, OR kickoff
+     * time passed — the latter so a failed status refresh can't unlock a live game),
+     * replace the submitted value with the user's existing picks for that game.
+     */
+    private Map<String, List<String>> lockStartedGames(Map<String, List<String>> submitted,
+                                                       Map<String, List<String>> existing,
+                                                       List<Game> games) {
+        if (games == null) return submitted;
+        Map<String, List<String>> result = new HashMap<>(submitted);
+        java.time.Instant now = java.time.Instant.now();
+        for (Game g : games) {
+            String st = g.getStatus() == null ? "" : g.getStatus();
+            boolean statusStarted = !st.isEmpty()
+                    && !"STATUS_SCHEDULED".equalsIgnoreCase(st) && !"Scheduled".equalsIgnoreCase(st);
+            java.time.Instant kickoff = parseKickoffInstant(g.getDate());
+            boolean kickedOff = kickoff != null && !kickoff.isAfter(now);
+            if (!statusStarted && !kickedOff) continue;
+
+            String gid = String.valueOf(g.getGameID());
+            List<String> keep = existing == null ? null : existing.get(gid);
+            List<String> sub = result.remove(gid);
+            if (keep != null && !keep.isEmpty()) {
+                result.put(gid, new ArrayList<>(keep));
+            }
+            if (sub != null && !sub.equals(keep)) {
+                System.out.println("MakePicksServlet: game " + gid + " already started — submitted picks "
+                        + sub + " ignored, keeping " + keep);
+            }
+        }
+        return result;
+    }
+
+    /** game.date is ISO UTC, sometimes minutes-only ("2026-09-10T00:20Z"). */
+    private java.time.Instant parseKickoffInstant(String date) {
+        if (date == null || date.isEmpty()) return null;
+        String d = date.trim();
+        if (d.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}Z")) d = d.substring(0, d.length() - 1) + ":00Z";
+        try {
+            return java.time.ZonedDateTime.parse(d).toInstant();
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     private Map<String, List<String>> parsePicksFromRequest(HttpServletRequest request, int remainingPicks) {
         Map<String, List<String>> newPicks = new HashMap<>();
