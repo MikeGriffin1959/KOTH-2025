@@ -20,8 +20,11 @@ public class SqlConnectorPicksTable {
         System.out.println("SqlConnectorPicksTable.getOptimizedPicksAndGames method started");
         Map<Integer, Map<String, List<Map<String, Object>>>> allPicksByWeek = new HashMap<>();
 
+        // NOTE: every column createPickData() reads must be selected here AND in
+        // getPicksForAllWeeks — a missing one throws on the first row and silently
+        // returns an empty map (which zeroed every loss count on 2026-09-12).
         String sql = "SELECT u.idUser, u.userName, p.week, p.gameId, p.selectedTeam, p.season,  " +
-                "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, " +
+                "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, " +
                 "ht.apiTeamName AS homeTeamName, at.apiTeamName AS awayTeamName, " +
                 "u.picksPaid, u.initialPicks " +
                 "FROM KOTH.User u " +
@@ -234,7 +237,7 @@ public class SqlConnectorPicksTable {
         System.out.println("SqlConnectorPicksTable.updateCurrentWeekPicksForAllUsers: Refreshing picks for season " + currentSeason + ", week " + currentWeek);
 
         String sql = "SELECT u.idUser, u.userName, p.gameId, p.selectedTeam, " +
-                     "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, " +
+                     "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, " +
                      "ht.apiTeamName AS homeTeamName, at.apiTeamName AS awayTeamName, " +
                      "u.picksPaid, u.initialPicks " +
                      "FROM KOTH.User u " +
