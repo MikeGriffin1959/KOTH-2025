@@ -32,12 +32,16 @@
             <span class="blurb-time" id="blurbTime" data-epoch="${latestCommentary.createdAt.time}">
                 <fmt:formatDate value="${latestCommentary.createdAt}" pattern="EEE h:mm a" />
             </span>
+            <button type="button" class="blurb-toggle" id="blurbToggle" onclick="toggleCommentaryBlurb()"
+                    title="Hide commentary" aria-label="Hide commentary" aria-expanded="true">
+                <i class="fas fa-chevron-up"></i>
+            </button>
         </div>
     </div>
-    <div class="blurb-body">
+    <div class="blurb-body" id="blurbBody">
         ${fn:escapeXml(fn:substring(latestCommentary.body, 0, 280))}<c:if test="${fn:length(latestCommentary.body) > 280}">&hellip;</c:if>
     </div>
-    <div class="blurb-footer">
+    <div class="blurb-footer" id="blurbFooter">
         <a href="CommentaryServlet" class="blurb-link">
             Read full commentary <i class="fas fa-arrow-right"></i>
         </a>
@@ -68,7 +72,16 @@
     .blurb-badge-REVEAL  { background-color: #17a2b8; color: #fff; }
     .blurb-badge-EVENT   { background-color: #dc3545; color: #fff; }
     .blurb-badge-RECAP   { background-color: #28a745; color: #fff; }
+    .blurb-right { display: flex; align-items: center; gap: 8px; }
     .blurb-time { font-size: .7rem; color: #777; }
+    .blurb-toggle {
+        background: none; border: 1px solid #555; color: #999; padding: 1px 7px;
+        border-radius: 3px; font-size: .7rem; cursor: pointer; line-height: 1.4; transition: all .2s;
+    }
+    .blurb-toggle:hover { border-color: #3d8ef7; color: #3d8ef7; }
+    .commentary-blurb.collapsed .blurb-body,
+    .commentary-blurb.collapsed .blurb-footer { display: none; }
+    .commentary-blurb.collapsed .blurb-header { border-bottom: none; }
     .blurb-body { padding: 10px 12px; color: #d0d0d0; font-size: .88rem; line-height: 1.55; }
     .blurb-footer {
         display: flex; justify-content: space-between; align-items: center;
@@ -89,6 +102,29 @@
 </style>
 
 <script>
+// Show/hide the commentary box; the choice is remembered per browser (localStorage).
+function applyCommentaryBlurbState(collapsed) {
+    var box = document.querySelector('.commentary-blurb');
+    var btn = document.getElementById('blurbToggle');
+    if (!box || !btn) return;
+    box.classList.toggle('collapsed', collapsed);
+    btn.innerHTML = '<i class="fas fa-chevron-' + (collapsed ? 'down' : 'up') + '"></i>';
+    btn.title = collapsed ? 'Show commentary' : 'Hide commentary';
+    btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+}
+function toggleCommentaryBlurb() {
+    var box = document.querySelector('.commentary-blurb');
+    var collapsed = !(box && box.classList.contains('collapsed'));
+    applyCommentaryBlurbState(collapsed);
+    try { localStorage.setItem('kothCommentaryCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+}
+(function () {
+    var collapsed = false;
+    try { collapsed = localStorage.getItem('kothCommentaryCollapsed') === '1'; } catch (e) {}
+    if (collapsed) applyCommentaryBlurbState(true);
+})();
+
 // Viewer-local timestamp (server fallback renders in the server's timezone)
 (function () {
     var el = document.getElementById('blurbTime');
