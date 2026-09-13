@@ -75,9 +75,15 @@ String currentUserName = (String) request.getAttribute("currentUserName");
 %>
 
 <%!
-private List<String> sortUsersByRemainingPicks(List<String> users, Map<String, Integer> initialPicks, Map<String, Integer> userLosses) {
+private List<String> sortUsersByRemainingPicks(List<String> users, Map<String, Integer> initialPicks,
+                                               Map<String, Integer> userLosses, String currentUser) {
     return users.stream()
         .sorted((u1, u2) -> {
+            // The logged-in player always sits at the top; everything else keeps the existing order.
+            boolean me1 = u1.equals(currentUser);
+            boolean me2 = u2.equals(currentUser);
+            if (me1 != me2) return me1 ? -1 : 1;
+
             int remainingPicks1 = getRemainingPicks(u1, initialPicks, userLosses);
             int remainingPicks2 = getRemainingPicks(u2, initialPicks, userLosses);
             
@@ -676,7 +682,7 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                    <tbody>
 						<% 
 						if (allUsers != null && !allUsers.isEmpty()) {
-						   allUsers = sortUsersByRemainingPicks(allUsers, initialPicks, userLosses);
+						   allUsers = sortUsersByRemainingPicks(allUsers, initialPicks, userLosses, currentUserName);
 						   
 						   for (String user : allUsers) { 
 						       Integer userInitialPicksObj = initialPicks.get(user);
