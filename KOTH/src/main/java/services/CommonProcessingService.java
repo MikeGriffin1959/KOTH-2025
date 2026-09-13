@@ -719,8 +719,11 @@ public class CommonProcessingService {
             remainingPicks.put(username, initialPicks.get(username));
         }
 
-        // Only calculate up to the previous week
-        int endWeek = Math.max(startWeek, currentWeek - 1);
+        // Only calculate up to the previous week. In week 1 there is no prior week,
+        // so the loop must not run at all — the old Math.max(startWeek, ...) clamp made
+        // it process week 1 itself, so a Thursday-night loss cut the player's week-1
+        // pick allowance (Make Picks then rejected re-submitting their existing picks).
+        int endWeek = currentWeek - 1;
 
         // Process each week's picks
         for (int week = startWeek; week <= endWeek; week++) {

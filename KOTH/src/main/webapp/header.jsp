@@ -83,9 +83,10 @@
         height: 56px;
         padding: 6px;
     }
+    /* px, not em: the link itself is 2em, so an em value here compounds */
     .container .nav-bar .nav.nav-tabs .nav-item .nav-link .icon i,
     .container .nav-bar .nav.nav-tabs .nav-item .nav-link i {
-        font-size: 1.6em;
+        font-size: 24px;
     }
 
     /* Utility Bar */
