@@ -122,17 +122,7 @@ public class MakePicksServlet {
             return "error";
         }
 
-        // ⬅️ Pull the fresh, app-scope map (not the session-cached one)
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> userRemainingPicksPriorWeek =
-            (Map<String, Integer>) ctx.getAttribute("userRemainingPicksPriorWeek");
-
-        if (userRemainingPicksPriorWeek == null || userRemainingPicksPriorWeek.isEmpty()) {
-            model.addAttribute("errorMessage", "Unable to load required user data. Please refresh.");
-            return "error";
-        }
-
-        int remainingPicks = userRemainingPicksPriorWeek.getOrDefault(userName, 0);
+        int remainingPicks = priorWeekRemaining(ctx, userName);
         System.out.println("MakePicksServlet: Remaining picks for user " + userName + ": " + remainingPicks);
 
         try {
@@ -213,12 +203,11 @@ public class MakePicksServlet {
             return requireLoginOrRedirect(request);
         }
 
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> userRemainingPicksPriorWeek =
-            (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
-        if (userRemainingPicksPriorWeek == null) userRemainingPicksPriorWeek = Collections.emptyMap();
-
-        int remainingPicks = userRemainingPicksPriorWeek.getOrDefault(userName, 0);
+        // Same live source as the GET. The old session copy only existed if the user had
+        // visited Home in this session — after a session expiry + login that returned
+        // straight here, it was null, the cap read as 0, and every submit was rejected.
+        int remainingPicks = priorWeekRemaining(request.getServletContext(), userName);
+        System.out.println("MakePicksServlet.doPost: Remaining picks for user " + userName + ": " + remainingPicks);
 
         Map<String, List<String>> newPicks = parsePicksFromRequest(request, remainingPicks);
         if (newPicks == null) {
@@ -250,6 +239,26 @@ public class MakePicksServlet {
         return doGet(request, response, model);
     }
 
+
+    /**
+     * Lives available for this week = remaining picks ENTERING the week, from the
+     * app-scope map the Home page maintains. If the map is missing (fresh server) or
+     * doesn't know this player yet (just joined the season), rebuild the derived data
+     * the same way HomeServlet does instead of failing or defaulting to 0.
+     */
+    @SuppressWarnings("unchecked")
+    private int priorWeekRemaining(ServletContext ctx, String userName) {
+        Map<String, Integer> map = (Map<String, Integer>) ctx.getAttribute("userRemainingPicksPriorWeek");
+        if (map == null || map.isEmpty() || !map.containsKey(userName)) {
+            System.out.println("MakePicksServlet: prior-week map missing/stale for " + userName + " — rebuilding");
+            commonProcessingService.updateSeasonAndWeek(ctx);
+            commonProcessingService.updateTeamData(ctx);
+            commonProcessingService.updateUserData(ctx);
+            commonProcessingService.updatePicksData(ctx);
+            map = (Map<String, Integer>) ctx.getAttribute("userRemainingPicksPriorWeek");
+        }
+        return map == null ? 0 : map.getOrDefault(userName, 0);
+    }
 
     /**
      * For every game that has started (ESPN status no longer scheduled, OR kickoff

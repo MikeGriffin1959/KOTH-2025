@@ -59,6 +59,21 @@ public class MyScoreboardServlet {
         return s != null && s.getAttribute("userName") != null && s.getAttribute("userId") != null;
     }
 
+    /** Lives entering this week from the app-scope map; rebuilds it if missing/stale (see MakePicksServlet). */
+    @SuppressWarnings("unchecked")
+    private int priorWeekRemaining(ServletContext ctx, String userName) {
+        Map<String, Integer> map = (Map<String, Integer>) ctx.getAttribute("userRemainingPicksPriorWeek");
+        if (map == null || map.isEmpty() || !map.containsKey(userName)) {
+            System.out.println("MyScoreboardServlet: prior-week map missing/stale for " + userName + " — rebuilding");
+            commonProcessingService.updateSeasonAndWeek(ctx);
+            commonProcessingService.updateTeamData(ctx);
+            commonProcessingService.updateUserData(ctx);
+            commonProcessingService.updatePicksData(ctx);
+            map = (Map<String, Integer>) ctx.getAttribute("userRemainingPicksPriorWeek");
+        }
+        return map == null ? 0 : map.getOrDefault(userName, 0);
+    }
+
     /** Return null if OK; otherwise a redirect string to LoginServlet with returnTo. */
     private String requireLoginOrRedirect(HttpServletRequest request) {
         if (isLoggedIn(request)) return null;
@@ -122,17 +137,7 @@ public class MyScoreboardServlet {
             return "error";
         }
 
-        // ⬅️ Pull the fresh, app-scope map (not the session-cached one)
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> userRemainingPicksPriorWeek =
-            (Map<String, Integer>) ctx.getAttribute("userRemainingPicksPriorWeek");
-
-        if (userRemainingPicksPriorWeek == null || userRemainingPicksPriorWeek.isEmpty()) {
-            model.addAttribute("errorMessage", "Unable to load required user data. Please refresh.");
-            return "error";
-        }
-
-        int remainingPicks = userRemainingPicksPriorWeek.getOrDefault(userName, 0);
+        int remainingPicks = priorWeekRemaining(ctx, userName);
         System.out.println("MyScoreboardServlet: Remaining picks for user " + userName + ": " + remainingPicks);
 
         try {
@@ -218,12 +223,9 @@ public class MyScoreboardServlet {
             return requireLoginOrRedirect(request);
         }
 
-        @SuppressWarnings("unchecked")
-        Map<String, Integer> userRemainingPicksPriorWeek =
-            (Map<String, Integer>) session.getAttribute("userRemainingPicksPriorWeek");
-        if (userRemainingPicksPriorWeek == null) userRemainingPicksPriorWeek = Collections.emptyMap();
-
-        int remainingPicks = userRemainingPicksPriorWeek.getOrDefault(userName, 0);
+        // Same live source as the GET (the session copy is null after an expiry + login
+        // that returns straight here, which read the cap as 0 and rejected every submit).
+        int remainingPicks = priorWeekRemaining(request.getServletContext(), userName);
 
         Map<String, List<String>> newPicks = parsePicksFromRequest(request, remainingPicks);
         if (newPicks == null) {
