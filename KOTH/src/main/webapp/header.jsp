@@ -70,6 +70,24 @@
 }
 /* Small Screens Styles */
 @media (max-width: 767px) {
+    /* Nav tiles: exactly 4 per row (gap 4px x 3 = 12px), so the four
+       everyone-tiles (Home / Picks / Scoreboard / Commentary) share one line
+       on a 305px-wide phone. Commissioner/Edge tiles wrap to a second row. */
+    .container .nav-bar .nav.nav-tabs .nav-item {
+        flex: 0 0 calc(25% - 3px);
+        max-width: calc(25% - 3px);
+    }
+    .container .nav-bar .nav.nav-tabs .nav-item .nav-link {
+        min-width: 0;
+        width: 100%;
+        height: 56px;
+        padding: 6px;
+    }
+    .container .nav-bar .nav.nav-tabs .nav-item .nav-link .icon i,
+    .container .nav-bar .nav.nav-tabs .nav-item .nav-link i {
+        font-size: 1.6em;
+    }
+
     /* Utility Bar */
     .utility-bar {
         padding: 5px;
@@ -171,8 +189,8 @@
 <body>
     <div class="utility-bar">
         <div class="koth-info">
-            <div>${applicationScope.kothSeason}</div>
-            <div>${season} Week: ${week}</div>
+            <div>${empty applicationScope.kothSeason ? season : applicationScope.kothSeason}</div>
+            <div>Week: ${week}</div>
         </div>
 
 	    <div class="user-info">

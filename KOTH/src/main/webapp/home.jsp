@@ -570,8 +570,8 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
        <div class="info-box-wrapper">
            <div class="info-box">
                <p><strong>Total Pot:</strong> $${sessionScope.totalPot}</p>
-               <p><strong>Players Left:</strong> ${sessionScope.usersWithRemainingPicks}</p>
-               <p><strong>Total Picks Left:</strong> ${sessionScope.totalRemainingPicks}</p>
+               <p><strong>Players Left:</strong> ${sessionScope.usersWithRemainingPicks}/${sessionScope.totalPlayers}</p>
+               <p><strong>Total Picks Left:</strong> ${sessionScope.totalRemainingPicks}/${sessionScope.totalInitialPicks}</p>
                <p><strong>Your Picks Left:</strong> ${sessionScope.userRemainingPicks[sessionScope.userName]}</p>
            </div>
        </div>

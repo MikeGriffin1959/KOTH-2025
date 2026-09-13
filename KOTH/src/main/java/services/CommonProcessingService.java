@@ -44,11 +44,15 @@ public class CommonProcessingService {
         int totalPot;
         int usersWithRemainingPicks;
         int totalRemainingPicks;
+        int totalPlayers;        // season starters (denominator for Players Left)
+        int totalInitialPicks;   // season starting picks (denominator for Total Picks Left)
 
         ProcessingResult() {
             this.totalPot = 0;
             this.usersWithRemainingPicks = 0;
             this.totalRemainingPicks = 0;
+            this.totalPlayers = 0;
+            this.totalInitialPicks = 0;
         }
     }
 
@@ -147,12 +151,18 @@ public class CommonProcessingService {
                 optimizedData, initialPicks, userLosses, teamNameToAbbrev, allUsers, games, gamesForWeek,
                 remainingPicksWeekly);
 
+        // Season starting totals (denominators on the Home info box)
+        httpSession.setAttribute("totalPlayers", result.totalPlayers);
+        httpSession.setAttribute("totalInitialPicks", result.totalInitialPicks);
+
         // Set attributes in the request as well
         request.setAttribute("season", String.valueOf(season));
         request.setAttribute("currentWeek", String.valueOf(week));
         request.setAttribute("totalPot", result.totalPot);
         request.setAttribute("usersWithRemainingPicks", result.usersWithRemainingPicks);
         request.setAttribute("totalRemainingPicks", result.totalRemainingPicks);
+        request.setAttribute("totalPlayers", result.totalPlayers);
+        request.setAttribute("totalInitialPicks", result.totalInitialPicks);
 
         System.out.println("  userRemainingPicks for " + userName + ": " + userRemainingPicks.get(userName));
         System.out.println("  Total Pot: $" + result.totalPot);
@@ -348,7 +358,11 @@ public class CommonProcessingService {
         
         int remainingPicks = Math.max(0, userInitialPicks - losses);
         userRemainingPicks.put(username, remainingPicks);
-        
+        if (userInitialPicks > 0) {
+            result.totalPlayers++;
+            result.totalInitialPicks += userInitialPicks;
+        }
+
         String currentSeason = (String) servletContext.getAttribute("season");
         String kothSeason = (String) servletContext.getAttribute("kothSeason");
         // Get prices for matching season number and KOTH season
