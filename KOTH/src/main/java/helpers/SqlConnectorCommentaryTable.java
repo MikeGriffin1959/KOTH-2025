@@ -151,6 +151,28 @@ public class SqlConnectorCommentaryTable {
      * for the week? (idx_dedupe alone can't distinguish TEST from RECAP since
      * both carry NULL gameId/eventType.) Used by CommentaryScheduler.
      */
+    /** True if an EVENT row of any of the given types exists for this game this week. */
+    public boolean hasEventForGame(int season, int week, int gameId, String... eventTypes) {
+        if (eventTypes == null || eventTypes.length == 0) return false;
+        StringBuilder in = new StringBuilder();
+        for (int i = 0; i < eventTypes.length; i++) in.append(i == 0 ? "?" : ",?");
+        String sql = "SELECT COUNT(*) FROM KOTH.Commentary WHERE season = ? AND week = ? AND gameId = ? "
+                   + "AND streamType = 'EVENT' AND eventType IN (" + in + ")";
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, week);
+            ps.setInt(3, gameId);
+            for (int i = 0; i < eventTypes.length; i++) ps.setString(4 + i, eventTypes[i]);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorCommentaryTable.hasEventForGame - Error: " + e.getMessage());
+            return false;
+        }
+    }
+
     public boolean hasCommentary(int season, int week, String streamType) {
         String sql = "SELECT COUNT(*) FROM KOTH.Commentary WHERE season = ? AND week = ? AND streamType = ?";
         try (Connection connection = dataSource.getConnection();

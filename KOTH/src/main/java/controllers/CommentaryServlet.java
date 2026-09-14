@@ -113,6 +113,7 @@ public class CommentaryServlet {
             n.put("id", c.getCommentaryId());
             n.put("streamType", c.getStreamType());
             n.put("eventType", c.getEventType());
+            n.put("eventLabel", c.getEventTypeLabel());
             n.put("week", c.getWeek());
             n.put("snark", c.getSnarkLevel());
             n.put("time", c.getCreatedAt() != null ? fmt.format(c.getCreatedAt()) : "");

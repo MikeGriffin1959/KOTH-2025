@@ -133,7 +133,7 @@ public class CommentaryScheduler {
             List<Map<String, Object>> gameStates = commentaryTable.getWeekGameStates(season, currentWeek);
             if (isGameWindow(gameStates)) {
                 refreshLiveScores();
-                runEventDetection(season, currentWeek, cfg);
+                runEventDetection(season, currentWeek, cfg, gameStates);
             }
 
             // M4: Weekly Preview — once, on the configured preview day (>= 9am ET),
@@ -194,7 +194,7 @@ public class CommentaryScheduler {
             }
             System.out.println("CommentaryScheduler.tickLateDrama - two-minute drill in progress, tight check");
             refreshLiveScores();
-            runEventDetection(season, week, prices.get(0));
+            runEventDetection(season, week, prices.get(0), gameStates);
         } catch (Exception e) {
             System.err.println("CommentaryScheduler.tickLateDrama - error: " + e.getMessage());
         }
@@ -340,19 +340,40 @@ public class CommentaryScheduler {
     // ── M3 internals ───────────────────────────────────────────
 
     /** Detect events and generate commentary for any not yet covered (idx_dedupe). */
-    private void runEventDetection(int season, int week, PicksPrice cfg) {
+    /** Final-result events older than this (measured from kickoff) are not announced — no backfill. */
+    private static final long FINAL_EVENT_MAX_AGE_SEC = 6 * 60 * 60;
+
+    private void runEventDetection(int season, int week, PicksPrice cfg, List<Map<String, Object>> gameStates) {
+        Map<Integer, Instant> kickoffs = new java.util.HashMap<>();
+        for (Map<String, Object> g : gameStates) {
+            Instant k = parseKickoff((String) g.get("date"));
+            if (k != null) kickoffs.put((Integer) g.get("gameId"), k);
+        }
+        Instant now = Instant.now();
+
         List<RaceEvent> events = eventDetector.detect(season, week, cfg.getSnarkLevel());
         for (RaceEvent ev : events) {
             // Once per (week, game, eventType)
             if (commentaryTable.findByDedupeKey(season, cfg.getKothSeason(), week, ev.getGameId(), ev.getType().name())) {
                 continue;
             }
-            // GAME_FINAL_WIN is suppressed if LATE_DRAMA already covered the game
-            if (ev.getType() == RaceEvent.EventType.GAME_FINAL_WIN
-                    && commentaryTable.findByDedupeKey(season, cfg.getKothSeason(), week, ev.getGameId(),
-                            RaceEvent.EventType.LATE_DRAMA.name())) {
-                continue;
+            // Final-result events are live reactions: skip games that ended long ago
+            // (e.g. after a deploy that adds a new event type, or a scheduler outage).
+            // The Week Recap covers those. Live-game events are inherently current.
+            switch (ev.getType()) {
+                case PICK_LOST: case GAME_FINAL_WIN: case NARROW_SURVIVAL: case ELIMINATION:
+                    Instant k = kickoffs.get(ev.getGameId());
+                    if (k != null && k.plusSeconds(FINAL_EVENT_MAX_AGE_SEC).isBefore(now)) {
+                        System.out.println("CommentaryScheduler - skipping stale " + ev.getType()
+                                + " for gameId=" + ev.getGameId() + " (kickoff > 6h ago, no backfill)");
+                        continue;
+                    }
+                    break;
+                default:
+                    break;
             }
+            // (GAME_FINAL_WIN after LATE_DRAMA is no longer suppressed — the detector now
+            //  emits it precisely as the closure for a game live commentary sweated over.)
             boolean generated = commentaryService.generateEventCommentary(season, week, ev);
             System.out.println("CommentaryScheduler - event " + ev.getType() + " gameId=" + ev.getGameId()
                     + " -> " + (generated ? "generated" : "skipped/failed"));

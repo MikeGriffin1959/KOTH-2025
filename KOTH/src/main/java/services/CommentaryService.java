@@ -785,6 +785,13 @@ public class CommentaryService {
         if (event.getType() == model.RaceEvent.EventType.ELIMINATION) {
             sb.append("Remember: ELIMINATION is sympathetic at every snark level. ");
             sb.append("Warm sendoff, no mockery, no Woof.\n\n");
+        } else if (event.getType() == model.RaceEvent.EventType.PICK_LOST) {
+            sb.append("PICK LOST: the game is final and their pick lost, but they are STILL IN the pool. ");
+            sb.append("This is the resolution of the game — if the data mentions lives left, say so. ");
+            sb.append("Full snark is allowed (they survived), but no eulogy: it's a burned life, not an exit.\n\n");
+        } else if (event.getType() == model.RaceEvent.EventType.GAME_FINAL_WIN) {
+            sb.append("The game is final and their pick WON. If the data notes earlier live commentary sweated ");
+            sb.append("this game, treat this as the exhale — close the loop on that drama.\n\n");
         }
         sb.append("Write the ").append(event.getType().name()).append(" commentary now (1-2 sentences).");
         return sb.toString();

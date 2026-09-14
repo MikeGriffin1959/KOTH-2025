@@ -72,6 +72,23 @@ public class Commentary {
         return eventType;
     }
 
+    /** Plain-English badge label: LATE_DRAMA -> "Late Drama", GAME_FINAL_WIN -> "Safe Win". */
+    public String getEventTypeLabel() {
+        if (eventType == null || eventType.isEmpty()) return null;
+        switch (eventType) {
+            case "GAME_FINAL_WIN": return "Safe Win";
+            case "PICK_LOST":      return "Pick Lost";
+            default:
+                StringBuilder sb = new StringBuilder();
+                for (String w : eventType.toLowerCase().split("_")) {
+                    if (w.isEmpty()) continue;
+                    if (sb.length() > 0) sb.append(' ');
+                    sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+                }
+                return sb.toString();
+        }
+    }
+
     public void setEventType(String eventType) {
         this.eventType = eventType;
     }

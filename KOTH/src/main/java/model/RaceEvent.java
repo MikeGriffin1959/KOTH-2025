@@ -17,7 +17,8 @@ public class RaceEvent {
         LATE_DRAMA,        // tied/one-score game inside 2:00 of Q4/OT with fates riding on it
         NARROW_SURVIVAL,   // user's team wins by <=3 — affectionate teasing territory
         ELIMINATION,       // a final loss/tie that ends a user's season — SYMPATHETIC, no Woof
-        GAME_FINAL_WIN,    // clean win (optional, high snark only)
+        PICK_LOST,         // a final loss/tie that burns a life but the user is still alive — closure
+        GAME_FINAL_WIN,    // clean win (high snark, or as closure after live drama on the game)
         LAST_STAND         // multiple alive users, diverging picks, final game of the week
     }
 

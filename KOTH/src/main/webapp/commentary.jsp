@@ -82,7 +82,7 @@
                             <div class="c-head-left">
                                 <span class="c-badge c-badge-${c.streamType}">
                                     <c:choose>
-                                        <c:when test="${c.streamType == 'EVENT' and not empty c.eventType}">${c.eventType}</c:when>
+                                        <c:when test="${c.streamType == 'EVENT' and not empty c.eventTypeLabel}">${c.eventTypeLabel}</c:when>
                                         <c:when test="${c.streamType == 'TEST'}">Test</c:when>
                                         <c:when test="${c.streamType == 'PREVIEW'}">Preview</c:when>
                                         <c:when test="${c.streamType == 'REVEAL'}">Reveal</c:when>
@@ -125,7 +125,7 @@
     });
 
     function badgeLabel(streamType, eventType) {
-        if (streamType === 'EVENT' && eventType) return eventType;
+        if (streamType === 'EVENT' && eventType) return eventType;   // caller passes the plain-English label
         switch (streamType) {
             case 'TEST': return 'Test';
             case 'PREVIEW': return 'Preview';
@@ -146,7 +146,7 @@
         list.innerHTML = entries.map(function (e) {
             return '<div class="c-entry">'
                 + '<div class="c-head"><div class="c-head-left">'
-                + '<span class="c-badge c-badge-' + esc(e.streamType) + '">' + esc(badgeLabel(e.streamType, e.eventType)) + '</span>'
+                + '<span class="c-badge c-badge-' + esc(e.streamType) + '">' + esc(badgeLabel(e.streamType, e.eventLabel || e.eventType)) + '</span>'
                 + '<span class="c-week">Week ' + e.week + '</span>'
                 + '<span class="c-snark">snark ' + e.snark + '</span>'
                 + '</div><span class="c-time">' + esc(e.timeMs > 0 ? localTime(e.timeMs) : e.time) + '</span></div>'

@@ -48,6 +48,7 @@ public class EventDetector {
         // Aggregate affected users per (eventType, gameId) so one game emits one
         // event per type with all affected users (affectedUserIds is a list).
         Map<String, EventDraft> drafts = new LinkedHashMap<>();
+        Map<Integer, Boolean> dramaCache = new LinkedHashMap<>();
 
         for (Map<String, Object> p : picks) {
             String status = (String) p.get("status");
@@ -83,8 +84,9 @@ public class EventDetector {
                         + " picked " + selected + ", trailing by " + (-margin) + ".");
                 }
                 // UPSET_ALERT: clear favorite (|spread| >= 3) that users picked is
-                // trailing after halftime
-                if (periodNum >= 3 && spread != null && Math.abs(spread) >= 3) {
+                // trailing with 7:30 or less left in Q4 (or in OT) — late enough to matter
+                boolean lateQ4 = (periodNum == 4 && clockSeconds >= 0 && clockSeconds <= 450) || periodNum > 4;
+                if (lateQ4 && spread != null && Math.abs(spread) >= 3) {
                     String favorite = spread < 0 ? home : away;
                     boolean pickedFavorite = selected != null && selected.equals(favorite);
                     boolean favoriteTrailing = (spread < 0) ? homeScore < awayScore : awayScore < homeScore;
@@ -109,20 +111,30 @@ public class EventDetector {
                     add(drafts, RaceEvent.EventType.NARROW_SURVIVAL, gameId, userId, firstName,
                         "FINAL: " + gameLine + ". " + firstName + "'s " + selected
                         + " survived by " + margin + ".");
-                } else if (margin > 3 && snarkLevel >= 8) {
-                    // GAME_FINAL_WIN: clean win — optional, high snark only
+                } else if (margin > 3 && (snarkLevel >= 8 || dramaPreceded(season, week, gameId, dramaCache))) {
+                    // GAME_FINAL_WIN: clean win — high snark only, EXCEPT when live commentary
+                    // already covered this game (drama/trouble/upset): then it's the closure.
+                    boolean closure = dramaPreceded(season, week, gameId, dramaCache);
                     add(drafts, RaceEvent.EventType.GAME_FINAL_WIN, gameId, userId, firstName,
                         "FINAL: " + gameLine + ". " + firstName + "'s " + selected
-                        + " won comfortably by " + margin + ".");
+                        + " won comfortably by " + margin + "."
+                        + (closure ? " (Earlier live commentary sweated this game — this is the resolution.)" : ""));
                 } else if (margin <= 0) {
-                    // Loss or tie (a tie is a loss). ELIMINATION only when it ends
-                    // the user's season (remaining picks now 0).
+                    // Loss or tie (a tie is a loss). ELIMINATION when it ends the user's
+                    // season (remaining now 0); otherwise PICK_LOST — a burned life, closure
+                    // for any earlier drama, but the player is still standing.
                     Integer remaining = remainingByUsername.get(username);
+                    String how = (margin == 0) ? "TIED (a tie is a loss)" : "lost by " + (-margin);
                     if (remaining != null && remaining == 0) {
-                        String how = (margin == 0) ? "TIED (a tie is a loss)" : "lost by " + (-margin);
                         add(drafts, RaceEvent.EventType.ELIMINATION, gameId, userId, firstName,
                             "FINAL: " + gameLine + ". " + firstName + "'s " + selected + " " + how
                             + " — that was their last pick. " + firstName + " is OUT of the pool for the season.");
+                    } else {
+                        String lives = remaining == null ? "" : " " + firstName + " has " + remaining
+                            + (remaining == 1 ? " life" : " lives") + " left.";
+                        add(drafts, RaceEvent.EventType.PICK_LOST, gameId, userId, firstName,
+                            "FINAL: " + gameLine + ". " + firstName + "'s " + selected + " " + how
+                            + " — one life burned, still in the pool." + lives);
                     }
                 }
             }
@@ -179,6 +191,13 @@ public class EventDetector {
     }
 
     // ── helpers ─────────────────────────────────────────────────
+
+    /** Did live commentary (drama / trouble / upset alert) already cover this game? Cached per detect(). */
+    private boolean dramaPreceded(int season, int week, int gameId, Map<Integer, Boolean> cache) {
+        return cache.computeIfAbsent(gameId, id -> commentaryTable.hasEventForGame(season, week, id,
+                RaceEvent.EventType.LATE_DRAMA.name(), RaceEvent.EventType.TROUBLE.name(),
+                RaceEvent.EventType.UPSET_ALERT.name()));
+    }
 
     private void add(Map<String, EventDraft> drafts, RaceEvent.EventType type, int gameId,
                      int userId, String firstName, String line) {

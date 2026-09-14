@@ -16,17 +16,6 @@
         <div class="blurb-left">
             <i class="fa-solid fa-tower-broadcast blurb-icon"></i>
             <span class="blurb-label">Commentary</span>
-            <span class="blurb-type-badge blurb-badge-${latestCommentary.streamType}">
-                <c:choose>
-                    <c:when test="${latestCommentary.streamType == 'EVENT' and not empty latestCommentary.eventType}">${latestCommentary.eventType}</c:when>
-                    <c:when test="${latestCommentary.streamType == 'TEST'}">Test</c:when>
-                    <c:when test="${latestCommentary.streamType == 'PREVIEW'}">Preview</c:when>
-                    <c:when test="${latestCommentary.streamType == 'REVEAL'}">Reveal</c:when>
-                    <c:when test="${latestCommentary.streamType == 'EVENT'}">Event</c:when>
-                    <c:when test="${latestCommentary.streamType == 'RECAP'}">Recap</c:when>
-                    <c:otherwise>${latestCommentary.streamType}</c:otherwise>
-                </c:choose>
-            </span>
         </div>
         <div class="blurb-right">
             <span class="blurb-time" id="blurbTime" data-epoch="${latestCommentary.createdAt.time}">
@@ -37,6 +26,19 @@
                 <i class="fas fa-chevron-up"></i>
             </button>
         </div>
+    </div>
+    <div class="blurb-badge-row">
+        <span class="blurb-type-badge blurb-badge-${latestCommentary.streamType}">
+            <c:choose>
+                <c:when test="${latestCommentary.streamType == 'EVENT' and not empty latestCommentary.eventTypeLabel}">${latestCommentary.eventTypeLabel}</c:when>
+                <c:when test="${latestCommentary.streamType == 'TEST'}">Test</c:when>
+                <c:when test="${latestCommentary.streamType == 'PREVIEW'}">Preview</c:when>
+                <c:when test="${latestCommentary.streamType == 'REVEAL'}">Reveal</c:when>
+                <c:when test="${latestCommentary.streamType == 'EVENT'}">Event</c:when>
+                <c:when test="${latestCommentary.streamType == 'RECAP'}">Recap</c:when>
+                <c:otherwise>${latestCommentary.streamType}</c:otherwise>
+            </c:choose>
+        </span>
     </div>
     <div class="blurb-body" id="blurbBody">
         ${fn:escapeXml(fn:substring(latestCommentary.body, 0, 280))}<c:if test="${fn:length(latestCommentary.body) > 280}">&hellip;</c:if>
@@ -66,7 +68,9 @@
     .blurb-left { display: flex; align-items: center; gap: 6px; }
     .blurb-icon { color: #0261c2; font-size: .85rem; }
     .blurb-label { font-size: .78rem; font-weight: 600; color: #ccc; letter-spacing: .3px; }
-    .blurb-type-badge { font-size: .6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: .5px; }
+    .blurb-badge-row { padding: 6px 12px 0; }
+    .commentary-blurb.collapsed .blurb-badge-row { padding-bottom: 8px; }
+    .blurb-type-badge { display: inline-block; font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: .5px; }
     .blurb-badge-TEST    { background-color: #6c757d; color: #fff; }
     .blurb-badge-PREVIEW { background-color: #0261c2; color: #fff; }
     .blurb-badge-REVEAL  { background-color: #17a2b8; color: #fff; }
