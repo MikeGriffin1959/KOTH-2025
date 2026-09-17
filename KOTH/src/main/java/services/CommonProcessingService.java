@@ -230,6 +230,20 @@ public class CommonProcessingService {
 
     public void updatePicksData(ServletContext servletContext) {
         System.out.println("CommonProcessingService.updatePicksData method started");
+        // Self-sufficient on a cold start: whichever request arrives first after a
+        // restart (Make Picks, Home, ...) must not depend on another page having
+        // populated season/week, the team-name map, or initialPicks already.
+        // (2026-09-17: a Make Picks load right after a deploy NPE'd here on a null
+        //  teamNameToAbbrev and then poisoned Home for everyone.)
+        if (servletContext.getAttribute("season") == null || servletContext.getAttribute("week") == null) {
+            updateSeasonAndWeek(servletContext);
+        }
+        if (servletContext.getAttribute("teamNameToAbbrev") == null) {
+            updateTeamData(servletContext);
+        }
+        if (servletContext.getAttribute("initialPicks") == null) {
+            updateUserData(servletContext);
+        }
         int currentSeason = Integer.parseInt((String) servletContext.getAttribute("season"));
         int currentWeek = Integer.parseInt((String) servletContext.getAttribute("week"));
 
