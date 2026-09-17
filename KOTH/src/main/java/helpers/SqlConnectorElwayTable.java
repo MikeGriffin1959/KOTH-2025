@@ -79,6 +79,22 @@ public class SqlConnectorElwayTable {
         return map;
     }
 
+    /** When this week's projections were last imported (null if none). */
+    public Timestamp getWeekLastImport(int season, int week) {
+        String sql = "SELECT MAX(importedAt) FROM KOTH.ElwayProjection WHERE season=? AND week=?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, season);
+            ps.setInt(2, week);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getTimestamp(1);
+            }
+        } catch (SQLException e) {
+            System.err.println("SqlConnectorElwayTable.getWeekLastImport error: " + e.getMessage());
+        }
+        return null;
+    }
+
     /** Import status for the Edge page: total rows, weeks covered, most recent import time. */
     public Map<String, Object> getImportStatus(int season) {
         Map<String, Object> status = new HashMap<>();

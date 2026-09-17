@@ -70,11 +70,17 @@ public class EdgeAdminController {
         // Stale = older than STALE_AFTER_MIN, so a near-kickoff refresh pulls fresh lines.
         // Manual refresh (?refresh=true) always rebuilds.
         java.sql.Timestamp newest = edgeTable.getNewestSnapshotAt(s, w);
-        boolean needsBuild = refresh || newest == null ||
+        // An ELWAY import newer than the snapshots also forces a rebuild, so the
+        // scheduled Tue/Thu import flows into the blend with no manual step.
+        java.sql.Timestamp elwayWeekImportedAt = elwayTable.getWeekLastImport(s, w);
+        boolean elwayNewerThanBuild = elwayWeekImportedAt != null && newest != null
+                && elwayWeekImportedAt.after(newest);
+        boolean needsBuild = refresh || newest == null || elwayNewerThanBuild ||
                 (System.currentTimeMillis() - newest.getTime()) > STALE_AFTER_MIN * 60_000L;
         if (needsBuild) {
             String why = refresh ? "manual refresh"
                        : newest == null ? "no snapshots"
+                       : elwayNewerThanBuild ? "ELWAY imported after last build"
                        : "stale (" + ((System.currentTimeMillis() - newest.getTime()) / 60_000L) + "min old)";
             System.out.println("DEBUG[edge]: auto-build triggered — " + why);
             try {
@@ -126,6 +132,22 @@ public class EdgeAdminController {
         @SuppressWarnings("unchecked")
         List<Integer> elwayWeekList = (List<Integer>) elwayStatus.get("weeks");
         model.addAttribute("elwayHasThisWeek", elwayWeekList != null && elwayWeekList.contains(w));
+
+        // Freshness: "current" means this week's rows were imported after Nate's weekly
+        // ELWAY update, which lands Tuesday; the cutoff is the most recent Tuesday 6am ET.
+        String elwayState;
+        if (elwayWeekImportedAt == null) {
+            elwayState = "NONE";
+        } else {
+            java.time.ZonedDateTime nowEt = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/New_York"));
+            java.time.ZonedDateTime cutoff = nowEt.with(java.time.temporal.TemporalAdjusters
+                    .previousOrSame(java.time.DayOfWeek.TUESDAY)).withHour(6).withMinute(0).withSecond(0).withNano(0);
+            if (cutoff.isAfter(nowEt)) cutoff = cutoff.minusWeeks(1);   // it's Tuesday before 6am
+            elwayState = elwayWeekImportedAt.toInstant().isBefore(cutoff.toInstant()) ? "STALE" : "CURRENT";
+        }
+        model.addAttribute("elwayState", elwayState);
+        model.addAttribute("elwayWeekImportedAt",
+                elwayWeekImportedAt == null ? null : new java.util.Date(elwayWeekImportedAt.getTime()));
 
         return "edge";
     }

@@ -472,21 +472,28 @@
 		            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:8px;">
 		                <strong style="font-size:1rem;"><i class="fas fa-chart-line" style="color:#1A43BF;"></i> Nate Silver's ELWAY projections</strong>
 		                <c:choose>
-		                    <c:when test="${elwayHasThisWeek}">
-		                        <span class="built" style="margin-left:0; color:#81c784;"><i class="fas fa-check"></i> Week ${week} loaded</span>
+		                    <c:when test="${elwayState == 'CURRENT'}">
+		                        <span class="built" style="margin-left:0; color:#81c784; font-weight:700;"><i class="fas fa-check-circle"></i> CURRENT for Week ${week}
+		                            &middot; imported <fmt:formatDate value="${elwayWeekImportedAt}" pattern="EEE MMM d, h:mm a"/></span>
+		                    </c:when>
+		                    <c:when test="${elwayState == 'STALE'}">
+		                        <span class="built" style="margin-left:0; color:#ffc107; font-weight:700;"><i class="fas fa-exclamation-triangle"></i> STALE for Week ${week}
+		                            &middot; imported <fmt:formatDate value="${elwayWeekImportedAt}" pattern="EEE MMM d, h:mm a"/>, before this week's ELWAY update</span>
 		                    </c:when>
 		                    <c:otherwise>
-		                        <span class="built" style="margin-left:0; color:#ffc107;"><i class="fas fa-exclamation-triangle"></i> Week ${week} not imported yet</span>
+		                        <span class="built" style="margin-left:0; color:#ff8a80; font-weight:700;"><i class="fas fa-times-circle"></i> NOT LOADED for Week ${week} &mdash; blend is running without ELWAY</span>
 		                    </c:otherwise>
 		                </c:choose>
-		                <c:if test="${elwayRows > 0}">
-		                    <span class="built" style="margin-left:0;">
-		                        ${elwayRows} game(s) &middot; weeks ${elwayWeeks}
-		                        <c:if test="${elwayLastImport != null}"> &middot; last import <fmt:formatDate value="${elwayLastImport}" pattern="MMM d, h:mm a"/></c:if>
-		                    </span>
-		                </c:if>
 		            </div>
 		            <div class="sub" style="margin-bottom:8px;">
+		                <i class="far fa-clock"></i> Auto-refresh: a scheduled task on Griff's desktop imports the current week
+		                every <strong>Tuesday and Thursday at 10:00 AM</strong> (it runs when the Claude app is open, or on its next launch).
+		                The blend rebuilds itself on the next page load after any import &mdash; nothing to click here.
+		                <c:if test="${elwayRows > 0}"><span class="built" style="margin-left:6px;">${elwayRows} game(s) on file &middot; weeks ${elwayWeeks}</span></c:if>
+		            </div>
+		            <details style="margin-top:6px;">
+		                <summary style="cursor:pointer; color:#cfd6e4; font-size:0.85rem;">Manual import (only if the auto-refresh missed)</summary>
+		            <div class="sub" style="margin:8px 0;">
 		                On the Silver Bulletin ELWAY page, select the rows of the <em>"ELWAY future game projections"</em> table
 		                (Wk &middot; Home &middot; Win prob &middot; Away &middot; Win prob &middot; Home spread &middot; Total), copy, and paste below.
 		                Multiple weeks at once are fine &mdash; each row's Wk column is used. Re-importing a week overwrites it.
@@ -501,6 +508,7 @@
 		                    <i class="fas fa-file-import"></i> Import ELWAY &amp; rebuild Week ${week}
 		                </button>
 		            </form>
+		            </details>
 		        </div>
 		    </div>
 
