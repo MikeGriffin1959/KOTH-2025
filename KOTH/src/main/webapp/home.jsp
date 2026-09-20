@@ -70,6 +70,10 @@ java.util.Set<String> revealedGameIds = (java.util.Set<String>) request.getAttri
 if (revealedGameIds == null) revealedGameIds = new java.util.HashSet<>();
 Map<String, Long> teamKickoff = (Map<String, Long>) request.getAttribute("teamKickoff");
 if (teamKickoff == null) teamKickoff = new HashMap<>();
+Map<String, String> teamScoreLine = (Map<String, String>) request.getAttribute("teamScoreLine");
+if (teamScoreLine == null) teamScoreLine = new HashMap<>();
+Map<String, Boolean> teamAhead = (Map<String, Boolean>) request.getAttribute("teamAhead");
+if (teamAhead == null) teamAhead = new HashMap<>();
 String currentUserName = (String) request.getAttribute("currentUserName");
 
 %>
@@ -361,6 +365,16 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 	
 	/* Status styles */
 	.pick-win,
+	/* Live/final score under the pick count: green = this team ahead, red = tied or behind */
+	.team-item span.score-line {
+	    font-size: 0.72em;
+	    font-weight: 700;
+	    margin-top: 0;
+	    line-height: 1.1;
+	}
+	.team-item span.score-ahead  { color: #4caf50; }
+	.team-item span.score-behind { color: #ff5252; }
+
 	.winner .team-logo {
 	    border-color: green !important;
 	}
@@ -648,6 +662,15 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                                        </div>
                                    </div>
                                    <span><%= maskedTeam ? "?" : count %></span>
+                                   <%
+                                       String scoreLine = maskedTeam ? null : teamScoreLine.get(teamAbbr);
+                                       if (scoreLine != null) {
+                                           boolean ahead = Boolean.TRUE.equals(teamAhead.get(teamAbbr));
+                                   %>
+                                   <span class="score-line <%= ahead ? "score-ahead" : "score-behind" %>"><%= scoreLine %></span>
+                                   <%
+                                       }
+                                   %>
                                </div>
                        <%
                            }

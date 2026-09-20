@@ -154,12 +154,16 @@ public class HomeServlet {
             java.util.Set<String> revealedTeams = new java.util.HashSet<>();
             java.util.Set<String> revealedGameIds = new java.util.HashSet<>();
             Map<String, Long> teamKickoff = new HashMap<>();   // abbrev -> kickoff epoch ms (tile ordering)
+            Map<String, String> teamScoreLine = new HashMap<>(); // abbrev -> "24-17" (this team first), started games
+            Map<String, Boolean> teamAhead = new HashMap<>();    // abbrev -> true if this team is ahead
             calculateTeamPickCountsAndResults(allWeeksData, weekInt, teamPickCounts, teamResults,
                     (Map<String, String>) context.getAttribute("teamNameToAbbrev"),
-                    revealedTeams, revealedGameIds, teamKickoff);
+                    revealedTeams, revealedGameIds, teamKickoff, teamScoreLine, teamAhead);
             request.setAttribute("revealedTeams", revealedTeams);
             request.setAttribute("revealedGameIds", revealedGameIds);
             request.setAttribute("teamKickoff", teamKickoff);
+            request.setAttribute("teamScoreLine", teamScoreLine);
+            request.setAttribute("teamAhead", teamAhead);
 
             // ✅ Prepare user full names
             List<String> allUsers = (List<String>) session.getAttribute("allUsers");
@@ -289,7 +293,9 @@ public class HomeServlet {
 	                                               Map<String, String> teamNameToAbbrev,
 	                                               java.util.Set<String> revealedTeams,
 	                                               java.util.Set<String> revealedGameIds,
-	                                               Map<String, Long> teamKickoff) {
+	                                               Map<String, Long> teamKickoff,
+	                                               Map<String, String> teamScoreLine,
+	                                               Map<String, Boolean> teamAhead) {
 
 	    if (teamNameToAbbrev == null) {
 	        System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
@@ -323,6 +329,12 @@ public class HomeServlet {
 	                String a = teamNameToAbbrev.get((String) game.get("awayTeamName"));
 	                if (h != null) revealedTeams.add(h);
 	                if (a != null) revealedTeams.add(a);
+	                // Live/final score for the picks tiles, oriented to each team ("us-them").
+	                // Ahead = strictly winning; a tie reads as behind (a tie is a loss in KOTH).
+	                int hs = game.get("homeScore") instanceof Integer ? (Integer) game.get("homeScore") : 0;
+	                int as = game.get("awayScore") instanceof Integer ? (Integer) game.get("awayScore") : 0;
+	                if (h != null) { teamScoreLine.put(h, hs + "-" + as); teamAhead.put(h, hs > as); }
+	                if (a != null) { teamScoreLine.put(a, as + "-" + hs); teamAhead.put(a, as > hs); }
 	            }
 	
 	            // Count picks. Normalize to the abbreviation before merging — legacy rows
