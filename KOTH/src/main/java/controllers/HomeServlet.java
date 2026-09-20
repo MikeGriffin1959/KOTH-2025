@@ -154,16 +154,18 @@ public class HomeServlet {
             java.util.Set<String> revealedTeams = new java.util.HashSet<>();
             java.util.Set<String> revealedGameIds = new java.util.HashSet<>();
             Map<String, Long> teamKickoff = new HashMap<>();   // abbrev -> kickoff epoch ms (tile ordering)
-            Map<String, String> teamScoreLine = new HashMap<>(); // abbrev -> "24-17" (this team first), started games
+            Map<String, String> teamScoreLine = new HashMap<>(); // abbrev -> "L 17-24" / "24-17" (this team first)
             Map<String, Boolean> teamAhead = new HashMap<>();    // abbrev -> true if this team is ahead
+            Map<String, String> teamScoreStatus = new HashMap<>(); // abbrev -> "Q4 2:33" / "Half" / "OT 1:10" / "Final"
             calculateTeamPickCountsAndResults(allWeeksData, weekInt, teamPickCounts, teamResults,
                     (Map<String, String>) context.getAttribute("teamNameToAbbrev"),
-                    revealedTeams, revealedGameIds, teamKickoff, teamScoreLine, teamAhead);
+                    revealedTeams, revealedGameIds, teamKickoff, teamScoreLine, teamAhead, teamScoreStatus);
             request.setAttribute("revealedTeams", revealedTeams);
             request.setAttribute("revealedGameIds", revealedGameIds);
             request.setAttribute("teamKickoff", teamKickoff);
             request.setAttribute("teamScoreLine", teamScoreLine);
             request.setAttribute("teamAhead", teamAhead);
+            request.setAttribute("teamScoreStatus", teamScoreStatus);
 
             // ✅ Prepare user full names
             List<String> allUsers = (List<String>) session.getAttribute("allUsers");
@@ -295,7 +297,8 @@ public class HomeServlet {
 	                                               java.util.Set<String> revealedGameIds,
 	                                               Map<String, Long> teamKickoff,
 	                                               Map<String, String> teamScoreLine,
-	                                               Map<String, Boolean> teamAhead) {
+	                                               Map<String, Boolean> teamAhead,
+	                                               Map<String, String> teamScoreStatus) {
 
 	    if (teamNameToAbbrev == null) {
 	        System.err.println("ERROR: teamNameToAbbrev is NULL. Check ServletContext initialization.");
@@ -333,8 +336,18 @@ public class HomeServlet {
 	                // Ahead = strictly winning; a tie reads as behind (a tie is a loss in KOTH).
 	                int hs = game.get("homeScore") instanceof Integer ? (Integer) game.get("homeScore") : 0;
 	                int as = game.get("awayScore") instanceof Integer ? (Integer) game.get("awayScore") : 0;
-	                if (h != null) { teamScoreLine.put(h, hs + "-" + as); teamAhead.put(h, hs > as); }
-	                if (a != null) { teamScoreLine.put(a, as + "-" + hs); teamAhead.put(a, as > hs); }
+	                boolean isFinal = st.equals("STATUS_FINAL") || st.equals("Final") || st.equals("F/OT");
+	                String gameStatus = gameStatusLabel(st, (String) game.get("period"), (String) game.get("displayClock"), isFinal);
+	                if (h != null) {
+	                    teamScoreLine.put(h, resultPrefix(isFinal, hs, as) + hs + "-" + as);
+	                    teamAhead.put(h, hs > as);
+	                    teamScoreStatus.put(h, gameStatus);
+	                }
+	                if (a != null) {
+	                    teamScoreLine.put(a, resultPrefix(isFinal, as, hs) + as + "-" + hs);
+	                    teamAhead.put(a, as > hs);
+	                    teamScoreStatus.put(a, gameStatus);
+	                }
 	            }
 	
 	            // Count picks. Normalize to the abbreviation before merging — legacy rows
@@ -367,6 +380,24 @@ public class HomeServlet {
 	            }
 	        }
 	    }
+	}
+
+	/** "W " / "L " / "T " for a final, oriented to the team whose score is listed first; "" while live. */
+	private String resultPrefix(boolean isFinal, int us, int them) {
+	    if (!isFinal) return "";
+	    return us > them ? "W " : (us < them ? "L " : "T ");
+	}
+
+	/** "Q4 2:33", "Half", "OT 1:10", "Final", or "Q1" right after kickoff before ESPN reports a clock. */
+	private String gameStatusLabel(String status, String period, String clock, boolean isFinal) {
+	    if (isFinal) return "Final";
+	    if ("STATUS_HALFTIME".equals(status)) return "Half";
+	    int p = 0;
+	    try { p = period == null ? 0 : Integer.parseInt(period.trim()); } catch (NumberFormatException ignore) {}
+	    String c = (clock == null || clock.isEmpty()) ? "" : " " + clock.trim();
+	    if (p >= 5) return "OT" + c;
+	    if (p >= 1) return "Q" + p + c;
+	    return "Q1";
 	}
 
 	/** game.date is ISO UTC, sometimes minutes-only ("2026-09-10T00:20Z"); null if unparseable. */

@@ -24,7 +24,7 @@ public class SqlConnectorPicksTable {
         // getPicksForAllWeeks — a missing one throws on the first row and silently
         // returns an empty map (which zeroed every loss count on 2026-09-12).
         String sql = "SELECT u.idUser, u.userName, p.week, p.gameId, p.selectedTeam, p.season,  " +
-                "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, " +
+                "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, g.period, g.displayClock, " +
                 "ht.apiTeamName AS homeTeamName, at.apiTeamName AS awayTeamName, " +
                 "u.picksPaid, u.initialPicks " +
                 "FROM KOTH.User u " +
@@ -237,7 +237,7 @@ public class SqlConnectorPicksTable {
         System.out.println("SqlConnectorPicksTable.updateCurrentWeekPicksForAllUsers: Refreshing picks for season " + currentSeason + ", week " + currentWeek);
 
         String sql = "SELECT u.idUser, u.userName, p.gameId, p.selectedTeam, " +
-                     "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, " +
+                     "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, g.period, g.displayClock, " +
                      "ht.apiTeamName AS homeTeamName, at.apiTeamName AS awayTeamName, " +
                      "u.picksPaid, u.initialPicks " +
                      "FROM KOTH.User u " +
@@ -288,6 +288,8 @@ public class SqlConnectorPicksTable {
 	        pickData.put("awayScore", rs.getInt("awayScore"));
 	        pickData.put("status", rs.getString("status"));
 	        pickData.put("date", rs.getString("date"));   // kickoff, ISO UTC ("2026-09-10T00:20Z")
+	        pickData.put("period", rs.getString("period"));           // "1".."4", "5"+ = OT
+	        pickData.put("displayClock", rs.getString("displayClock")); // "M:SS"
 	        pickData.put("homeTeamName", rs.getString("homeTeamName"));
 	        pickData.put("awayTeamName", rs.getString("awayTeamName"));
 	        pickData.put("picksPaid", rs.getBoolean("picksPaid"));
@@ -349,7 +351,7 @@ public class SqlConnectorPicksTable {
 		        Map<Integer, Map<String, List<Map<String, Object>>>> allWeeksData = new HashMap<>();
 
 		        String sql = "SELECT u.idUser, u.userName, p.week, p.gameId, p.selectedTeam, " +
-		                     "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, " +
+		                     "g.homeTeamId, g.awayTeamId, g.homeScore, g.awayScore, g.status, g.date, g.period, g.displayClock, " +
 		                     "ht.apiTeamName AS homeTeamName, at.apiTeamName AS awayTeamName, " +
 		                     "u.picksPaid, u.initialPicks " +
 		                     "FROM KOTH.User u " +

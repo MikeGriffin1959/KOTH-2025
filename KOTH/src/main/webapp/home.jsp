@@ -74,6 +74,8 @@ Map<String, String> teamScoreLine = (Map<String, String>) request.getAttribute("
 if (teamScoreLine == null) teamScoreLine = new HashMap<>();
 Map<String, Boolean> teamAhead = (Map<String, Boolean>) request.getAttribute("teamAhead");
 if (teamAhead == null) teamAhead = new HashMap<>();
+Map<String, String> teamScoreStatus = (Map<String, String>) request.getAttribute("teamScoreStatus");
+if (teamScoreStatus == null) teamScoreStatus = new HashMap<>();
 String currentUserName = (String) request.getAttribute("currentUserName");
 
 %>
@@ -374,6 +376,13 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 	}
 	.team-item span.score-ahead  { color: #4caf50; }
 	.team-item span.score-behind { color: #ff5252; }
+	.team-item span.score-status {
+	    font-size: 0.62em;
+	    color: #b8c0d0;
+	    margin-top: 0;
+	    line-height: 1.1;
+	    white-space: nowrap;
+	}
 
 	.winner .team-logo {
 	    border-color: green !important;
@@ -669,6 +678,12 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                                    %>
                                    <span class="score-line <%= ahead ? "score-ahead" : "score-behind" %>"><%= scoreLine %></span>
                                    <%
+                                           String scoreStatus = teamScoreStatus.get(teamAbbr);
+                                           if (scoreStatus != null) {
+                                   %>
+                                   <span class="score-status"><%= scoreStatus %></span>
+                                   <%
+                                           }
                                        }
                                    %>
                                </div>
