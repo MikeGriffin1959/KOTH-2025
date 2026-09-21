@@ -382,10 +382,9 @@ public class HomeServlet {
 	    }
 	}
 
-	/** "W " / "L " / "T " for a final, oriented to the team whose score is listed first; "" while live. */
+	/** No W/L prefix on finals — the green/red color already says it (Griff, 2026-09-21). */
 	private String resultPrefix(boolean isFinal, int us, int them) {
-	    if (!isFinal) return "";
-	    return us > them ? "W " : (us < them ? "L " : "T ");
+	    return "";
 	}
 
 	/** "Q4 2:33", "Half", "OT 1:10", "Final", or "Q1" right after kickoff before ESPN reports a clock. */

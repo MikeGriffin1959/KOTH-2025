@@ -365,8 +365,6 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 	    text-align: center;
 	}
 	
-	/* Status styles */
-	.pick-win,
 	/* Live/final score under the pick count: green = this team ahead, red = tied or behind */
 	.team-item span.score-line {
 	    font-size: 0.72em;
@@ -384,6 +382,9 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
 	    white-space: nowrap;
 	}
 
+	/* Status styles (keep .pick-win grouped with .winner — a 9/20 edit split them
+	   and the player grid lost its green win outlines) */
+	.pick-win,
 	.winner .team-logo {
 	    border-color: green !important;
 	}
