@@ -260,8 +260,9 @@
                                                              alt="<%= awayTeamName %>"
                                                              class="team-logo<%= isAwaySelected ? " selected-" + awaySelectionCount : "" %>">
                                                         <%= awayTeamName %>
-                                                        <% if (awayPickCount != null && awayPickCount > 0) { %>
-                                                            <span class="pick-count">(<%= maskThisGame ? "?" : awayPickCount %>)</span>
+                                                        <%-- While masked, render NOTHING: a "(?)" would reveal which teams were picked --%>
+                                                        <% if (!maskThisGame && awayPickCount != null && awayPickCount > 0) { %>
+                                                            <span class="pick-count">(<%= awayPickCount %>)</span>
                                                         <% } %>
                                                     </div>
                                                 </div>
@@ -286,8 +287,8 @@
                                                              alt="<%= homeTeamName %>"
                                                              class="team-logo<%= isHomeSelected ? " selected-" + homeSelectionCount : "" %>">
                                                         <%= homeTeamName %>
-                                                        <% if (homePickCount != null && homePickCount > 0) { %>
-                                                            <span class="pick-count">(<%= maskThisGame ? "?" : homePickCount %>)</span>
+                                                        <% if (!maskThisGame && homePickCount != null && homePickCount > 0) { %>
+                                                            <span class="pick-count">(<%= homePickCount %>)</span>
                                                         <% } %>
                                                     </div>
                                                 </div>
