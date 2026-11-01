@@ -659,10 +659,25 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                                
                                // ✅ Mask Picks: show NFL shield for teams whose game hasn't kicked off
                                boolean maskedTeam = maskPicks && !gameRevealed;
-                               String displayLogo = maskedTeam
-                                   ? "images/team-Logos/nfl-logo.svg"
-                                   : "images/team-Logos/" + teamAbbr.toLowerCase() + "-logo.svg";
-                               String displayTitle = maskedTeam ? "Pick (masked)" : teamName;
+                               // All masked picks collapse into ONE shield tile: one tile per hidden
+                               // team would reveal how many distinct teams were picked. Revealed
+                               // teams sort first, so the first masked entry is also the last tile.
+                               if (maskedTeam) {
+                       %>
+                               <div class="team-item">
+                                   <div class="logo-container">
+                                       <div class="team-logo"
+                                            style="background-image: url('images/team-Logos/nfl-logo.svg');"
+                                            title="Picks (masked until kickoff)">
+                                       </div>
+                                   </div>
+                                   <span>?</span>
+                               </div>
+                       <%
+                                   break;
+                               }
+                               String displayLogo = "images/team-Logos/" + teamAbbr.toLowerCase() + "-logo.svg";
+                               String displayTitle = teamName;
                        %>
                                <div class="team-item <%= resultClass %>">
                                    <div class="logo-container">
@@ -671,9 +686,9 @@ private int getRemainingPicks(String user, Map<String, Integer> initialPicks, Ma
                                             title="<%= displayTitle %>">
                                        </div>
                                    </div>
-                                   <span><%= maskedTeam ? "?" : count %></span>
+                                   <span><%= count %></span>
                                    <%
-                                       String scoreLine = maskedTeam ? null : teamScoreLine.get(teamAbbr);
+                                       String scoreLine = teamScoreLine.get(teamAbbr);
                                        if (scoreLine != null) {
                                            boolean ahead = Boolean.TRUE.equals(teamAhead.get(teamAbbr));
                                    %>
